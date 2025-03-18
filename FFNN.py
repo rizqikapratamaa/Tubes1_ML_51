@@ -3,16 +3,38 @@ import random
 import math
 
 class FFNN:
-    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5):
+    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5, hidden_activation = "sigmoid", output_activation = "sigmoid"):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.learning_rate = learning_rate
+
+        self.hidden_activation = hidden_activation.lower()
+        self.output_activation = output_activation.lower()
+
+        valid_activations = {'linear', 'relu', 'sigmoid', 'tanh'}
+        if self.hidden_activation not in valid_activations:
+            raise ValueError(f"Hidden activations should be one of: {valid_activations}")
+        if self.output_activation not in valid_activations:
+            raise ValueError(f"Output activations should be one of: {valid_activations}")
         
         self.weights_input_hidden = [[Node(random.uniform(-1, 1)) for _ in range(hidden_size)] for _ in range(input_size)]
         self.weights_hidden_output = [[Node(random.uniform(-1, 1)) for _ in range(output_size)] for _ in range(hidden_size)]
         self.bias_hidden = [Node(random.uniform(-1, 1)) for _ in range(hidden_size)]
         self.bias_output = [Node(random.uniform(-1, 1)) for _ in range(output_size)]
+
+    def apply_activation(self, node, activation_type, softmax_output = None):
+        if activation_type == 'linear':
+            return node.linear()
+        elif activation_type == 'relu':
+            return node.relu()
+        elif activation_type == 'sigmoid':
+            return node.sigmoid()
+        elif activation_type == 'tanh':
+            return node.tanh()
+        # tambahin softmax di sini
+        else:
+            raise ValueError(f"Unknown activation type: {activation_type}")
 
     def feedforward(self, inputs):
         inputs = [Node(x) for x in inputs]
@@ -21,15 +43,22 @@ class FFNN:
         
         for i in range(self.hidden_size):
             hidden_sum = self.bias_hidden[i]
-            for j in range (self.input_size):
+            for j in range(self.input_size):
                 hidden_sum = hidden_sum + (inputs[j] * self.weights_input_hidden[j][i])
-            hidden_layer[i] = hidden_sum.sigmoid()
+            hidden_layer[i] = self.apply_activation(hidden_sum, self.hidden_activation)
         
+
         for i in range(self.output_size):
             output_sum = self.bias_output[i]
             for j in range(self.hidden_size):
                 output_sum = output_sum + (hidden_layer[j] * self.weights_hidden_output[j][i])
-            output_layer[i] = output_sum.sigmoid()
+            output_layer[i] = output_sum
+        
+        if self.output_activation == 'softmax':
+            # ntar ubah aja ini pake softmax
+            output_layer = [self.apply_activation(o, self.output_activation) for o in output_layer]
+        else:
+            output_layer = [self.apply_activation(o, self.output_activation) for o in output_layer]
         
         return hidden_layer, output_layer
     
@@ -40,29 +69,6 @@ class FFNN:
             loss = loss + (diff * diff)
         loss = loss * Node(1.0 / self.output_size)
         return loss 
-    
-
-
-    def backpropagation(self, inputs, hidden_layer, outputs, target):
-        output_errors = [target[i] - outputs[i] for i in range(self.output_size)]
-        output_deltas = [output_errors[i] * self.sigmoid_derivative(outputs[i]) for i in range(self.output_size)]
-        
-        hidden_errors = [sum(output_deltas[j] * self.weights_hidden_output[i][j] for j in range(self.output_size)) for i in range(self.hidden_size)]
-        hidden_deltas = [hidden_errors[i] * self.sigmoid_derivative(hidden_layer[i]) for i in range(self.hidden_size)]
-        
-        for i in range(self.hidden_size):
-            for j in range(self.output_size):
-                self.weights_hidden_output[i][j] += self.learning_rate * output_deltas[j] * hidden_layer[i]
-        
-        for i in range(self.output_size):
-            self.bias_output[i] += self.learning_rate * output_deltas[i]
-        
-        for i in range(self.input_size):
-            for j in range(self.hidden_size):
-                self.weights_input_hidden[i][j] += self.learning_rate * hidden_deltas[j] * inputs[i]
-        
-        for i in range(self.hidden_size):
-            self.bias_hidden[i] += self.learning_rate * hidden_deltas[i]
 
     def train(self, training_data, target_data, epochs):
         for epoch in range(epochs):
