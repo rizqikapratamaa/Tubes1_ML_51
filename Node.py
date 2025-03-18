@@ -11,7 +11,7 @@ class Node:
     def __add__(self, other):
         other = other if isinstance(other, Node) else Node(other)
         result = Node(self.value + other.value)
-        result.parent = [(self, 1.0), other, 1.0] # gradient to its parents
+        result.parent = [(self, 1.0), (other, 1.0)] # gradient to its parents
         self.op = "add"
         return result
     
@@ -28,9 +28,8 @@ class Node:
         result.parent = [(self, value * (1 - value))]
         result.op = "sigmoid"
         return result
-    
-    def backward(self, gradient = 1.0):
+
+    def backward(self, gradient=1.0):
         self.gradient += gradient
         for parent, local_gradient in self.parent:
-            if parent.op:
-                parent.backward(gradient + local_gradient)
+            parent.backward(gradient * local_gradient)

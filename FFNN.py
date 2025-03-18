@@ -70,19 +70,23 @@ class FFNN:
             for inputs, target in zip(training_data, target_data):
                 for row in self.weights_input_hidden:
                     for w in row:
-                        w.grad = 0.0
+                        w.gradient = 0.0
                 for row in self.weights_hidden_output:
                     for w in row:
-                        w.grad = 0.0
+                        w.gradient = 0.0
                 for b in self.bias_hidden:
-                    b.grad = 0.0
+                    b.gradient = 0.0
                 for b in self.bias_output:
-                    b.grad = 0.0
+                    b.gradient = 0.0
 
                 hidden_layer, outputs = self.feedforward(inputs)
 
                 loss = self.compute_loss(outputs, target)
                 total_loss += loss.value
+
+                # print(f"Before backward: w[0][0].gradient = {self.weights_input_hidden[0][0].gradient}")
+                loss.backward()
+                # print(f"After backward: w[0][0].gradient = {self.weights_input_hidden[0][0].gradient}")
 
                 # update weights and biases base on gradient
 
