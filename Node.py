@@ -27,7 +27,7 @@ class Node:
         result = Node(value)
         result.parent = [(self, value * (1 - value))]
         result.op = "sigmoid"
-        return value
+        return result
     
     def backward(self, gradient = 1.0):
         self.gradient += gradient

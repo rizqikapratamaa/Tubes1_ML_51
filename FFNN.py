@@ -1,3 +1,4 @@
+from Node import Node
 import random
 import math
 
@@ -8,30 +9,39 @@ class FFNN:
         self.output_size = output_size
         self.learning_rate = learning_rate
         
-        self.weights_input_hidden = [[random.uniform(-1, 1) for _ in range(hidden_size)] for _ in range(input_size)]
-        self.weights_hidden_output = [[random.uniform(-1, 1) for _ in range(output_size)] for _ in range(hidden_size)]
-        self.bias_hidden = [random.uniform(-1, 1) for _ in range(hidden_size)]
-        self.bias_output = [random.uniform(-1, 1) for _ in range(output_size)]
-    
-    def sigmoid(self, x):
-        return 1 / (1 + math.exp(-x))
-
-    def sigmoid_derivative(self, x):
-        return x * (1 - x)
+        self.weights_input_hidden = [[Node(random.uniform(-1, 1)) for _ in range(hidden_size)] for _ in range(input_size)]
+        self.weights_hidden_output = [[Node(random.uniform(-1, 1)) for _ in range(output_size)] for _ in range(hidden_size)]
+        self.bias_hidden = [Node(random.uniform(-1, 1)) for _ in range(hidden_size)]
+        self.bias_output = [Node(random.uniform(-1, 1)) for _ in range(output_size)]
 
     def feedforward(self, inputs):
-        hidden_layer = [0] * self.hidden_size
-        output_layer = [0] * self.output_size
+        inputs = [Node(x) for x in inputs]
+        hidden_layer = [None] * self.hidden_size
+        output_layer = [None] * self.output_size
         
         for i in range(self.hidden_size):
-            hidden_layer[i] = sum(inputs[j] * self.weights_input_hidden[j][i] for j in range(self.input_size)) + self.bias_hidden[i]
-            hidden_layer[i] = self.sigmoid(hidden_layer[i])
+            hidden_sum = self.bias_hidden[i]
+            for j in range (self.input_size):
+                hidden_sum = hidden_sum + (inputs[j] * self.weights_input_hidden[j][i])
+            hidden_layer[i] = hidden_sum.sigmoid()
         
         for i in range(self.output_size):
-            output_layer[i] = sum(hidden_layer[j] * self.weights_hidden_output[j][i] for j in range(self.hidden_size)) + self.bias_output[i]
-            output_layer[i] = self.sigmoid(output_layer[i])
+            output_sum = self.bias_output[i]
+            for j in range(self.hidden_size):
+                output_sum = output_sum + (hidden_layer[j] * self.weights_hidden_output[j][i])
+            output_layer[i] = output_sum.sigmoid()
         
         return hidden_layer, output_layer
+    
+    def compute_loss(self, outputs, targets):
+        loss = Node(0.0)
+        for i in range(self.output_size):
+            diff = outputs[i] + Node(-targets[i])
+            loss = loss + (diff * diff)
+        loss = loss * Node(1.0 / self.output_size)
+        return loss 
+    
+
 
     def backpropagation(self, inputs, hidden_layer, outputs, target):
         output_errors = [target[i] - outputs[i] for i in range(self.output_size)]
@@ -58,13 +68,40 @@ class FFNN:
         for epoch in range(epochs):
             total_loss = 0
             for inputs, target in zip(training_data, target_data):
+                for row in self.weights_input_hidden:
+                    for w in row:
+                        w.grad = 0.0
+                for row in self.weights_hidden_output:
+                    for w in row:
+                        w.grad = 0.0
+                for b in self.bias_hidden:
+                    b.grad = 0.0
+                for b in self.bias_output:
+                    b.grad = 0.0
+
                 hidden_layer, outputs = self.feedforward(inputs)
-                self.backpropagation(inputs, hidden_layer, outputs, target)
-                total_loss += sum((target[i] - outputs[i]) ** 2 for i in range(self.output_size))
+
+                loss = self.compute_loss(outputs, target)
+                total_loss += loss.value
+
+                # update weights and biases base on gradient
+
+                for i in range(self.input_size):
+                    for j in range(self.hidden_size):
+                        w = self.weights_input_hidden[i][j]
+                        w.value -= self.learning_rate * w.gradient
+                for i in range(self.hidden_size):
+                    for j in range(self.output_size):
+                        w = self.weights_hidden_output[i][j]
+                        w.value -= self.learning_rate * w.gradient
+                for i in range(self.hidden_size):
+                    self.bias_hidden[i].value -= self.learning_rate * self.bias_hidden[i].gradient
+                for i in range(self.output_size):
+                    self.bias_output[i].value -= self.learning_rate * self.bias_output[i].gradient
             
             # if epoch % 100 == 0:
             print(f"Epoch {epoch}, Loss: {total_loss}")
 
     def predict(self, inputs):
         _, output = self.feedforward(inputs)
-        return output
+        return [o.value for o in output]
