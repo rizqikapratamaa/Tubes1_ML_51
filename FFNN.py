@@ -1,4 +1,5 @@
 from Node import Node
+from loss import *
 import random
 import math
 
@@ -12,7 +13,7 @@ class FFNN:
         self.hidden_activation = hidden_activation.lower()
         self.output_activation = output_activation.lower()
 
-        valid_activations = {'linear', 'relu', 'sigmoid', 'tanh'}
+        valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax'}
         if self.hidden_activation not in valid_activations:
             raise ValueError(f"Hidden activations should be one of: {valid_activations}")
         if self.output_activation not in valid_activations:
@@ -23,7 +24,7 @@ class FFNN:
         self.bias_hidden = [Node(random.uniform(-1, 1)) for _ in range(hidden_size)]
         self.bias_output = [Node(random.uniform(-1, 1)) for _ in range(output_size)]
 
-    def apply_activation(self, node, activation_type, softmax_output = None):
+    def apply_activation(self, node, activation_type):
         if activation_type == 'linear':
             return node.linear()
         elif activation_type == 'relu':
@@ -32,9 +33,16 @@ class FFNN:
             return node.sigmoid()
         elif activation_type == 'tanh':
             return node.tanh()
-        # tambahin softmax di sini
         else:
             raise ValueError(f"Unknown activation type: {activation_type}")
+
+    def apply_softmax(self, nodes):
+        # apply softmax to a list of nodes
+        max_val = max(n.value for n in nodes)
+        exp_vals = [Node(math.exp(n.value - max_val)) for n in nodes]
+        sum_exp = sum(n.value for n in exp_vals)
+        
+        return [Node(n.value / sum_exp) for n in exp_vals]
 
     def feedforward(self, inputs):
         inputs = [Node(x) for x in inputs]
@@ -45,30 +53,48 @@ class FFNN:
             hidden_sum = self.bias_hidden[i]
             for j in range(self.input_size):
                 hidden_sum = hidden_sum + (inputs[j] * self.weights_input_hidden[j][i])
-            hidden_layer[i] = self.apply_activation(hidden_sum, self.hidden_activation)
+            if self.hidden_activation == 'softmax':
+                # collect all hidden_sum values
+                hidden_sums = [None] * self.hidden_size
+                for k in range(self.hidden_size):
+                    h_sum = self.bias_hidden[k]
+                    for j in range(self.input_size):
+                        h_sum = h_sum + (inputs[j] * self.weights_input_hidden[j][k])
+                    hidden_sums[k] = h_sum
+                
+                # apply softmax to all hidden nodes at once
+                hidden_activated = self.apply_softmax(hidden_sums)
+                for k in range(self.hidden_size):
+                    hidden_layer[k] = hidden_activated[k]
+            else:
+                # for non softmax
+                hidden_layer[i] = self.apply_activation(hidden_sum, self.hidden_activation)
         
-
         for i in range(self.output_size):
             output_sum = self.bias_output[i]
             for j in range(self.hidden_size):
                 output_sum = output_sum + (hidden_layer[j] * self.weights_hidden_output[j][i])
             output_layer[i] = output_sum
         
+        # apply activation to output layer
         if self.output_activation == 'softmax':
-            # ntar ubah aja ini pake softmax
-            output_layer = [self.apply_activation(o, self.output_activation) for o in output_layer]
+            output_layer = self.apply_softmax(output_layer)
         else:
             output_layer = [self.apply_activation(o, self.output_activation) for o in output_layer]
         
         return hidden_layer, output_layer
     
     def compute_loss(self, outputs, targets):
-        loss = Node(0.0)
-        for i in range(self.output_size):
-            diff = outputs[i] + Node(-targets[i])
-            loss = loss + (diff * diff)
-        loss = loss * Node(1.0 / self.output_size)
-        return loss 
+        # use cross-entropy loss if output_activation is softmax
+        if self.output_activation == 'softmax':
+            return cce(outputs, targets, self.output_size)
+        else:
+            loss = Node(0.0)
+            for i in range(self.output_size):
+                diff = outputs[i] + Node(-targets[i])
+                loss = loss + (diff * diff)
+            loss = loss * Node(1.0 / self.output_size)
+            return loss 
 
     def train(self, training_data, target_data, epochs):
         for epoch in range(epochs):
