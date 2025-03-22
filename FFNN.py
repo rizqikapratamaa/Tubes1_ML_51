@@ -2,6 +2,9 @@ from Node import Node
 from loss import *
 import random
 import math
+import matplotlib.pyplot as plt
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score
 
 class FFNN:
     def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5, hidden_activation = "sigmoid", output_activation = "sigmoid"):
@@ -23,6 +26,7 @@ class FFNN:
         self.weights_hidden_output = [[Node(random.uniform(-1, 1)) for _ in range(output_size)] for _ in range(hidden_size)]
         self.bias_hidden = [Node(random.uniform(-1, 1)) for _ in range(hidden_size)]
         self.bias_output = [Node(random.uniform(-1, 1)) for _ in range(output_size)]
+        self.history = {"train_loss": [], "val_loss": []}
 
     def apply_activation(self, node, activation_type):
         if activation_type == 'linear':
@@ -96,9 +100,12 @@ class FFNN:
             loss = loss * Node(1.0 / self.output_size)
             return loss 
 
-    def train(self, training_data, target_data, epochs):
+    def train(self, training_data, target_data, validation_data, validation_target, epochs):
         for epoch in range(epochs):
             total_loss = 0
+            total_val_loss = 0
+
+            # training phase
             for inputs, target in zip(training_data, target_data):
                 for row in self.weights_input_hidden:
                     for w in row:
@@ -111,7 +118,7 @@ class FFNN:
                 for b in self.bias_output:
                     b.gradient = 0.0
 
-                hidden_layer, outputs = self.feedforward(inputs)
+                _, outputs = self.feedforward(inputs)
 
                 loss = self.compute_loss(outputs, target)
                 total_loss += loss.value
@@ -135,9 +142,44 @@ class FFNN:
                 for i in range(self.output_size):
                     self.bias_output[i].value -= self.learning_rate * self.bias_output[i].gradient
             
-            # if epoch % 100 == 0:
-            print(f"Epoch {epoch}, Loss: {total_loss}")
+            # validation phase
+            for inputs, target in zip(validation_data, validation_target):
+                _, outputs = self.feedforward(inputs)
+                loss = self.compute_loss(outputs, target)
+                total_val_loss += loss.value
+            
+            avg_train_loss = total_loss / len(training_data)
+            avg_val_loss = total_val_loss / len(validation_data)
+            self.history["train_loss"].append(avg_train_loss)
+            self.history["val_loss"].append(avg_val_loss)
+            
+            print(f"Epoch {epoch}, Loss: {avg_train_loss:.4f}")
 
     def predict(self, inputs):
         _, output = self.feedforward(inputs)
         return [o.value for o in output]
+    
+    # compare sama sklearn MLP
+    def compare_lib(self, X_train, y_train, X_test, y_test):
+        mlp = MLPClassifier(hidden_layer_sizes=(self.hidden_size,), activation=self.hidden_activation, solver='sgd', learning_rate_init=self.learning_rate, random_state=42)
+        mlp.fit(X_train, [t.index(1) for t in y_train])
+        
+        y_pred_ffnn = [self.predict(x).index(max(self.predict(x))) for x in X_test]
+        y_pred_mlp = mlp.predict(X_test)
+        
+        acc_ffnn = accuracy_score([t.index(1) for t in y_test], y_pred_ffnn)
+        acc_mlp = accuracy_score([t.index(1) for t in y_test], y_pred_mlp)
+        
+        print(f"Accuracy FFNN: {acc_ffnn * 100:.2f}%")
+        print(f"Accuracy MLP Sklearn: {acc_mlp * 100:.2f}%")
+
+    def plot_training_history(self):
+        plt.figure(figsize=(8, 5))
+        plt.plot(self.history['train_loss'], label='Training Loss', marker='o', markersize=2)
+        plt.plot(self.history['val_loss'], label='Validation Loss', marker='s', markersize=2)
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title('Training and Validation Loss')
+        plt.legend()
+        plt.grid()
+        plt.show()
