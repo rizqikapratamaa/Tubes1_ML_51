@@ -37,3 +37,5 @@ if __name__ == "__main__":
 
     ffnn.compare_lib(X_train, y_train, X_test, y_test)
     ffnn.plot_training_history()
+    ffnn.plot_weight_distributions()
+    ffnn.plot_gradient_distributions()

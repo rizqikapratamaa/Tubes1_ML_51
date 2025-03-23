@@ -200,3 +200,106 @@ class FFNN:
         plt.legend()
         plt.grid()
         plt.show()
+    
+    def get_layer_weights(self, layer_index):
+        if layer_index == 0:
+            # weights input-hidden
+            return [w.value for row in self.weights_input_hidden for w in row]
+        elif layer_index == 1:
+            # weights hidden-output
+            return [w.value for row in self.weights_hidden_output for w in row]
+        elif layer_index == 2:
+            # bias hidden
+            return [b.value for b in self.bias_hidden]
+        elif layer_index == 3:
+            # bias output
+            return [b.value for b in self.bias_output]
+        else:
+            raise ValueError("Layer index harus 0, 1, 2, atau 3")
+    
+    def get_layer_gradients(self, layer_index):
+        if layer_index == 0:
+            # weights input-hidden
+            return [w.gradient for row in self.weights_input_hidden for w in row]
+        elif layer_index == 1:
+            # weights hidden-output
+            return [w.gradient for row in self.weights_hidden_output for w in row]
+        elif layer_index == 2:
+            # bias hidden
+            return [b.gradient for b in self.bias_hidden]
+        elif layer_index == 3:
+            # bias output
+            return [b.gradient for b in self.bias_output]
+        else:
+            raise ValueError("Layer index harus 0, 1, 2, atau 3")
+    
+    def get_layer_name(self, layer_index):
+        if layer_index == 0:
+            return "Input-Hidden Weights"
+        elif layer_index == 1:
+            return "Hidden-Output Weights"
+        elif layer_index == 2:
+            return "Hidden Bias"
+        elif layer_index == 3:
+            return "Output Bias"
+        else:
+            return f"Unknown Layer {layer_index}"
+    
+    def plot_weight_distributions(self, layers_to_plot=None):
+        if layers_to_plot is None:
+            layers_to_plot = [0, 1, 2, 3]  
+        
+        n_plots = len(layers_to_plot)
+        if n_plots == 0:
+            print("Tidak ada layer yang ditentukan untuk ditampilkan.")
+            return
+        
+        fig, axes = plt.subplots(1, n_plots, figsize=(5*n_plots, 5))
+        if n_plots == 1:
+            axes = [axes]  
+        
+        for i, layer_idx in enumerate(layers_to_plot):
+            weights = self.get_layer_weights(layer_idx)
+            layer_name = self.get_layer_name(layer_idx)
+            
+            axes[i].hist(weights, bins=30, alpha=0.7)
+            axes[i].set_title(f"Weight Distribution - {layer_name}")
+            axes[i].set_xlabel("Weights")
+            axes[i].set_ylabel("Frequency")
+            axes[i].grid(alpha=0.3)
+        
+        plt.tight_layout()
+        plt.show()
+    
+    def plot_gradient_distributions(self, layers_to_plot=None):
+        if layers_to_plot is None:
+            layers_to_plot = [0, 1, 2, 3]  
+        
+        n_plots = len(layers_to_plot)
+        if n_plots == 0:
+            print("Tidak ada layer yang ditentukan untuk ditampilkan.")
+            return
+        
+        fig, axes = plt.subplots(1, n_plots, figsize=(5*n_plots, 5))
+        if n_plots == 1:
+            axes = [axes]  
+        
+        for i, layer_idx in enumerate(layers_to_plot):
+            gradients = self.get_layer_gradients(layer_idx)
+            layer_name = self.get_layer_name(layer_idx)
+            
+            if all(g == 0 for g in gradients):
+                axes[i].text(0.5, 0.5, "Semua gradien bernilai 0", 
+                             horizontalalignment='center',
+                             verticalalignment='center',
+                             transform=axes[i].transAxes)
+            else:
+                axes[i].hist(gradients, bins=30, alpha=0.7)
+            
+            axes[i].set_title(f"Gradient Distribution - {layer_name}")
+            axes[i].set_xlabel("Gradients")
+            axes[i].set_ylabel("Frequency")
+            axes[i].grid(alpha=0.3)
+        
+        plt.tight_layout()
+        plt.show()
