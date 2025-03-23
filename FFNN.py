@@ -2,32 +2,55 @@ from Node import Node
 from loss import *
 import random
 import math
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score
 
 class FFNN:
-    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5, hidden_activation = "sigmoid", output_activation = "sigmoid"):
+    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5, hidden_activation="sigmoid", 
+                 output_activation="sigmoid", zero_init=False, init_type="uniform", 
+                 lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.learning_rate = learning_rate
-
         self.hidden_activation = hidden_activation.lower()
         self.output_activation = output_activation.lower()
-
         valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax'}
+        
         if self.hidden_activation not in valid_activations:
             raise ValueError(f"Hidden activations should be one of: {valid_activations}")
         if self.output_activation not in valid_activations:
             raise ValueError(f"Output activations should be one of: {valid_activations}")
         
-        self.weights_input_hidden = [[Node(random.uniform(-1, 1)) for _ in range(hidden_size)] for _ in range(input_size)]
-        self.weights_hidden_output = [[Node(random.uniform(-1, 1)) for _ in range(output_size)] for _ in range(hidden_size)]
-        self.bias_hidden = [Node(random.uniform(-1, 1)) for _ in range(hidden_size)]
-        self.bias_output = [Node(random.uniform(-1, 1)) for _ in range(output_size)]
+        # set random seed
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+        
+        if not zero_init:
+            # inisialisasi weights dan bias berdasarkan tipe distribusi
+            if init_type == "uniform":
+                self.weights_input_hidden = [[Node(random.uniform(lower_bound, upper_bound)) for _ in range(hidden_size)] for _ in range(input_size)]
+                self.weights_hidden_output = [[Node(random.uniform(lower_bound, upper_bound)) for _ in range(output_size)] for _ in range(hidden_size)]
+                self.bias_hidden = [Node(random.uniform(lower_bound, upper_bound)) for _ in range(hidden_size)]
+                self.bias_output = [Node(random.uniform(lower_bound, upper_bound)) for _ in range(output_size)]
+            elif init_type == "normal":
+                self.weights_input_hidden = [[Node(np.random.normal(mean, math.sqrt(variance))) for _ in range(hidden_size)] for _ in range(input_size)]
+                self.weights_hidden_output = [[Node(np.random.normal(mean, math.sqrt(variance))) for _ in range(output_size)] for _ in range(hidden_size)]
+                self.bias_hidden = [Node(np.random.normal(mean, math.sqrt(variance))) for _ in range(hidden_size)]
+                self.bias_output = [Node(np.random.normal(mean, math.sqrt(variance))) for _ in range(output_size)]
+            else:
+                raise ValueError(f"Unknown initialization type: {init_type}. Use 'uniform' or 'normal'.")
+        else:
+            self.weights_input_hidden = [[Node(0.0) for _ in range(hidden_size)] for _ in range(input_size)]
+            self.weights_hidden_output = [[Node(0.0) for _ in range(output_size)] for _ in range(hidden_size)]
+            self.bias_hidden = [Node(0.0) for _ in range(hidden_size)]
+            self.bias_output = [Node(0.0) for _ in range(output_size)]
+        
         self.history = {"train_loss": [], "val_loss": []}
-
+    
     def apply_activation(self, node, activation_type):
         if activation_type == 'linear':
             return node.linear()
@@ -39,15 +62,15 @@ class FFNN:
             return node.tanh()
         else:
             raise ValueError(f"Unknown activation type: {activation_type}")
-
+    
     def apply_softmax(self, nodes):
-        # apply softmax to a list of nodes
+        # apply softmax ke list of nodes
         max_val = max(n.value for n in nodes)
         exp_vals = [Node(math.exp(n.value - max_val)) for n in nodes]
         sum_exp = sum(n.value for n in exp_vals)
         
         return [Node(n.value / sum_exp) for n in exp_vals]
-
+    
     def feedforward(self, inputs):
         inputs = [Node(x) for x in inputs]
         hidden_layer = [None] * self.hidden_size
@@ -58,7 +81,7 @@ class FFNN:
             for j in range(self.input_size):
                 hidden_sum = hidden_sum + (inputs[j] * self.weights_input_hidden[j][i])
             if self.hidden_activation == 'softmax':
-                # collect all hidden_sum values
+                # ambil semua hidden_sum values
                 hidden_sums = [None] * self.hidden_size
                 for k in range(self.hidden_size):
                     h_sum = self.bias_hidden[k]
@@ -66,7 +89,7 @@ class FFNN:
                         h_sum = h_sum + (inputs[j] * self.weights_input_hidden[j][k])
                     hidden_sums[k] = h_sum
                 
-                # apply softmax to all hidden nodes at once
+                # apply softmax ke semua hidden nodes at once
                 hidden_activated = self.apply_softmax(hidden_sums)
                 for k in range(self.hidden_size):
                     hidden_layer[k] = hidden_activated[k]
@@ -80,7 +103,7 @@ class FFNN:
                 output_sum = output_sum + (hidden_layer[j] * self.weights_hidden_output[j][i])
             output_layer[i] = output_sum
         
-        # apply activation to output layer
+        # apply activation ke output layer
         if self.output_activation == 'softmax':
             output_layer = self.apply_softmax(output_layer)
         else:
@@ -99,12 +122,11 @@ class FFNN:
                 loss = loss + (diff * diff)
             loss = loss * Node(1.0 / self.output_size)
             return loss 
-
+    
     def train(self, training_data, target_data, validation_data, validation_target, epochs):
         for epoch in range(epochs):
             total_loss = 0
             total_val_loss = 0
-
             # training phase
             for inputs, target in zip(training_data, target_data):
                 for row in self.weights_input_hidden:
@@ -117,18 +139,13 @@ class FFNN:
                     b.gradient = 0.0
                 for b in self.bias_output:
                     b.gradient = 0.0
-
                 _, outputs = self.feedforward(inputs)
-
                 loss = self.compute_loss(outputs, target)
                 total_loss += loss.value
-
                 # print(f"Before backward: w[0][0].gradient = {self.weights_input_hidden[0][0].gradient}")
                 loss.backward()
                 # print(f"After backward: w[0][0].gradient = {self.weights_input_hidden[0][0].gradient}")
-
                 # update weights and biases base on gradient
-
                 for i in range(self.input_size):
                     for j in range(self.hidden_size):
                         w = self.weights_input_hidden[i][j]
@@ -154,7 +171,7 @@ class FFNN:
             self.history["val_loss"].append(avg_val_loss)
             
             print(f"Epoch {epoch}, Loss: {avg_train_loss:.4f}")
-
+    
     def predict(self, inputs):
         _, output = self.feedforward(inputs)
         return [o.value for o in output]
@@ -172,7 +189,7 @@ class FFNN:
         
         print(f"Accuracy FFNN: {acc_ffnn * 100:.2f}%")
         print(f"Accuracy MLP Sklearn: {acc_mlp * 100:.2f}%")
-
+    
     def plot_training_history(self):
         plt.figure(figsize=(8, 5))
         plt.plot(self.history['train_loss'], label='Training Loss', marker='o', markersize=2)
