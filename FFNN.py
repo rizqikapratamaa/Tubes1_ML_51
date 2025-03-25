@@ -17,7 +17,7 @@ class FFNN:
         self.learning_rate = learning_rate
         self.hidden_activation = hidden_activation.lower()
         self.output_activation = output_activation.lower()
-        valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax'}
+        valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax', 'leaky_relu', 'elu'}
         
         if self.hidden_activation not in valid_activations:
             raise ValueError(f"Hidden activations should be one of: {valid_activations}")
@@ -60,6 +60,10 @@ class FFNN:
             return node.sigmoid()
         elif activation_type == 'tanh':
             return node.tanh()
+        elif activation_type == 'leaky_relu':
+            return node.leaky_relu()
+        elif activation_type == 'elu':
+            return node.elu()
         else:
             raise ValueError(f"Unknown activation type: {activation_type}")
     
