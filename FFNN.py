@@ -11,16 +11,19 @@ from tqdm import tqdm
 class FFNN:
     def __init__(self, input_size, hidden_sizes, output_size, learning_rate=0.5, hidden_activations="sigmoid", 
                  output_activation="sigmoid", loss_function='mse', zero_init=False, init_type="uniform", 
-                 lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None):
+                 lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None, reg_type='none', reg_lambda = 0.01):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.num_hidden_layers = len(hidden_sizes)
         self.output_size = output_size
         self.learning_rate = learning_rate
         self.loss_function = loss_function.lower()
+        self.reg_type = reg_type.lower()
+        self.reg_lambda = reg_lambda
 
         valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax', 'leaky_relu', 'elu'}
         valid_losses = {'mse', 'cce', 'bce'}
+        valid_reg_types = {'none', 'l1', 'l2'}
 
         if isinstance(hidden_activations, str):
             self.hidden_activations = [hidden_activations.lower()] * self.num_hidden_layers
@@ -39,6 +42,8 @@ class FFNN:
             raise ValueError(f"Output activations should be one of: {valid_activations}")
         if self.loss_function not in valid_losses:
             raise ValueError(f"Loss function should be one of: {valid_losses}")
+        if self.reg_type not in valid_reg_types:
+            raise ValueError(f"Regularization type should be one of: {valid_reg_types}")
         
         # set random seed
         if seed is not None:
@@ -49,7 +54,6 @@ class FFNN:
         self.biases = []
 
         layer_sizes = [input_size] + hidden_sizes+ [output_size]
-
 
         
         for i in range(len(layer_sizes) - 1):
@@ -162,6 +166,23 @@ class FFNN:
                     loss = loss + (diff * diff)
                 loss = loss * Node(1.0 / self.output_size)
                 return loss 
+            
+    def compute_regularization_loss(self):
+        reg_loss = Node(0.0)
+        if self.reg_type == 'l1':
+            for layer_weights in self.weights:
+                for row in layer_weights:
+                    for w in row:
+                        reg_loss = reg_loss + Node(abs(w.value))
+            reg_loss = reg_loss * Node(self.reg_lambda)
+        elif self.reg_type == 'l2':
+            for layer_weights in self.weights:
+                for row in layer_weights:
+                    for w in row:
+                        reg_loss = reg_loss + (w * w)
+            reg_loss = reg_loss * Node(self.reg_lambda / 2.0)
+        return reg_loss
+
     
     def train(self, training_data, target_data, validation_data, validation_target, epochs, batch_size=1, verbose=1):
         for epoch in range(epochs):
@@ -197,15 +218,27 @@ class FFNN:
                     loss = self.compute_loss(layer_outputs[-1], target)
                     batch_loss = batch_loss + loss
                 batch_loss = batch_loss * Node(1.0 / len(batch_inputs))
-                total_loss += batch_loss.value
+
+                if self.reg_type != 'none':
+                    reg_loss = self.compute_regularization_loss()
+                    total_loss_value = batch_loss.value + reg_loss.value
+                    batch_loss = batch_loss + reg_loss
+                else:
+                    total_loss_value = batch_loss.value
+
+
+                total_loss += total_loss_value
 
                 batch_loss.backward()
 
-                # Update bobot
                 for layer_idx in range(len(self.weights)):
                     for i in range(len(self.weights[layer_idx])):
                         for j in range(len(self.weights[layer_idx][i])):
                             w = self.weights[layer_idx][i][j]
+                            if self.reg_type == 'l1':
+                                w.gradient += self.reg_lambda * (1.0 if w.value > 0 else -1.0 if w.value < 0 else 0.0)
+                            elif self.reg_type == 'l2':
+                                w.gradient += self.reg_lambda * w.value
                             w.value -= self.learning_rate * w.gradient
                     for i in range(len(self.biases[layer_idx])):
                         b = self.biases[layer_idx][i]
@@ -218,7 +251,11 @@ class FFNN:
             for inputs, target in zip(validation_data, validation_target):
                 layer_outputs = self.feedforward(inputs)
                 loss = self.compute_loss(layer_outputs[-1], target)
-                total_val_loss += loss.value
+                if self.reg_type != "none":
+                    reg_loss = self.compute_regularization_loss()
+                    total_val_loss += loss.value + reg_loss.value
+                else:
+                    total_val_loss += loss.value
 
             avg_train_loss = total_loss / num_batches
             avg_val_loss = total_val_loss / len(validation_data)

@@ -29,7 +29,9 @@ if __name__ == "__main__":
         learning_rate=0.1,
         hidden_activations=['relu', 'relu'],
         output_activation='sigmoid', 
-        loss_function='mse',                 
+        loss_function='mse',      
+        reg_type='l1',
+        reg_lambda=0.001        
     )
     ffnn.train(X_train, y_train, X_val, y_val, epochs=20, batch_size=1, verbose=1)
     
