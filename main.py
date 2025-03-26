@@ -29,7 +29,7 @@ if __name__ == "__main__":
         learning_rate=0.1,      
         batch_size=16,          
         hidden_activation='relu',
-        output_activation='softmax',  
+        output_activation='sigmoid', 
         loss_function='mse',    
         verbose=1               
     )

@@ -115,7 +115,6 @@ class FFNN:
                 output_sum = output_sum + (hidden_layer[j] * self.weights_hidden_output[j][i])
             output_layer[i] = output_sum
         
-        # apply activation ke output layer
         if self.output_activation == 'softmax':
             output_layer = self.apply_softmax(output_layer)
         else:
@@ -124,7 +123,6 @@ class FFNN:
         return hidden_layer, output_layer
     
     def compute_loss(self, outputs, targets):
-        # use cross-entropy loss if output_activation is softmax
         if self.output_activation == 'softmax':
             return cce(outputs, targets, self.output_size)
         else:
@@ -145,10 +143,9 @@ class FFNN:
             total_loss = 0
             total_val_loss = 0
             
-            # Training phase with batching
             num_batches = math.ceil(len(training_data) / self.batch_size)
             if self.verbose == 1:
-                pbar = tqdm(range(num_batches), desc=f"Epoch {epoch+1}/{epochs}")
+                pbar = tqdm(range(num_batches), desc=f"Epoch {epoch+1}/{epochs}", ncols=50, bar_format='{l_bar}{bar}| {postfix}', leave=True)
             else:
                 pbar = range(num_batches)
                 
@@ -158,7 +155,6 @@ class FFNN:
                 batch_inputs = training_data[start_idx:end_idx]
                 batch_targets = target_data[start_idx:end_idx]
                 
-                # Reset gradients
                 for row in self.weights_input_hidden:
                     for w in row:
                         w.gradient = 0.0
@@ -170,7 +166,6 @@ class FFNN:
                 for b in self.bias_output:
                     b.gradient = 0.0
                 
-                # Forward and backward pass for batch
                 batch_loss = Node(0.0)
                 for inputs, target in zip(batch_inputs, batch_targets):
                     _, outputs = self.feedforward(inputs)
@@ -197,7 +192,7 @@ class FFNN:
                 
                 if self.verbose == 1:
                     avg_train_loss = total_loss / (batch_idx + 1)
-                    pbar.set_postfix({'train_loss': f'{avg_train_loss:.4f}'})
+                    pbar.set_postfix()
             
             # Validation phase
             for inputs, target in zip(validation_data, validation_target):
@@ -209,10 +204,11 @@ class FFNN:
             avg_val_loss = total_val_loss / len(validation_data)
             self.history["train_loss"].append(avg_train_loss)
             self.history["val_loss"].append(avg_val_loss)
-            
+
             if self.verbose == 1:
-                pbar.set_postfix({'train_loss': f'{avg_train_loss:.4f}', 'val_loss': f'{avg_val_loss:.4f}'})
-    
+                print(f"Train Loss: {avg_train_loss:.4f} - Val Loss: {avg_val_loss:.4f}")
+
+
     def predict(self, inputs):
         _, output = self.feedforward(inputs)
         return [o.value for o in output]
