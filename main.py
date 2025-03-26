@@ -23,17 +23,15 @@ if __name__ == "__main__":
     X_train, X_val, X_test, y_train, y_val, y_test = preprocess_iris()
     
     ffnn = FFNN(
-        input_size=4,           
-        hidden_size=5,          
-        output_size=3,          
-        learning_rate=0.1,      
-        batch_size=16,          
+        input_size=4,
+        hidden_size=5,
+        output_size=3,
+        learning_rate=0.1,
         hidden_activation='relu',
         output_activation='sigmoid', 
-        loss_function='mse',    
-        verbose=1               
+        loss_function='mse',                 
     )
-    ffnn.train(X_train, y_train, X_val, y_val, epochs=200)
+    ffnn.train(X_train, y_train, X_val, y_val, epochs=20, batch_size=1, verbose=1)
     
     correct = 0
     for inputs, target in zip(X_test, y_test):

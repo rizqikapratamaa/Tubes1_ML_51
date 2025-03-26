@@ -9,18 +9,16 @@ from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 
 class FFNN:
-    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5, batch_size=1, hidden_activation="sigmoid", 
-                 output_activation="sigmoid", loss_function='mse', verbose=0, zero_init=False, init_type="uniform", 
+    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5, hidden_activation="sigmoid", 
+                 output_activation="sigmoid", loss_function='mse', zero_init=False, init_type="uniform", 
                  lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.learning_rate = learning_rate
-        self.batch_size = batch_size
         self.hidden_activation = hidden_activation.lower()
         self.output_activation = output_activation.lower()
         self.loss_function = loss_function.lower()
-        self.verbose = verbose
 
         valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax', 'leaky_relu', 'elu'}
         valid_losses = {'mse', 'cce', 'bce'}
@@ -138,20 +136,20 @@ class FFNN:
                 loss = loss * Node(1.0 / self.output_size)
                 return loss 
     
-    def train(self, training_data, target_data, validation_data, validation_target, epochs):
+    def train(self, training_data, target_data, validation_data, validation_target, epochs, batch_size = 1, verbose = 1):
         for epoch in range(epochs):
             total_loss = 0
             total_val_loss = 0
             
-            num_batches = math.ceil(len(training_data) / self.batch_size)
-            if self.verbose == 1:
+            num_batches = math.ceil(len(training_data) / batch_size)
+            if verbose == 1:
                 pbar = tqdm(range(num_batches), desc=f"Epoch {epoch+1}/{epochs}", ncols=50, bar_format='{l_bar}{bar}| {postfix}', leave=True)
             else:
                 pbar = range(num_batches)
                 
             for batch_idx in pbar:
-                start_idx = batch_idx * self.batch_size
-                end_idx = min((batch_idx + 1) * self.batch_size, len(training_data))
+                start_idx = batch_idx * batch_size
+                end_idx = min((batch_idx + 1) * batch_size, len(training_data))
                 batch_inputs = training_data[start_idx:end_idx]
                 batch_targets = target_data[start_idx:end_idx]
                 
@@ -190,11 +188,10 @@ class FFNN:
                 for i in range(self.output_size):
                     self.bias_output[i].value -= self.learning_rate * self.bias_output[i].gradient
                 
-                if self.verbose == 1:
+                if verbose == 1:
                     avg_train_loss = total_loss / (batch_idx + 1)
                     pbar.set_postfix()
             
-            # Validation phase
             for inputs, target in zip(validation_data, validation_target):
                 _, outputs = self.feedforward(inputs)
                 loss = self.compute_loss(outputs, target)
@@ -205,7 +202,7 @@ class FFNN:
             self.history["train_loss"].append(avg_train_loss)
             self.history["val_loss"].append(avg_val_loss)
 
-            if self.verbose == 1:
+            if verbose == 1:
                 print(f"Train Loss: {avg_train_loss:.4f} - Val Loss: {avg_val_loss:.4f}")
 
 
