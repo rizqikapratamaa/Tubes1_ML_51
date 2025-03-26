@@ -38,8 +38,8 @@ The project report will also include experiments on different hyperparameters, a
 
 ## Requirements
 
-Programming Language: Python
-Libraries Used:
+> Programming Language: Python
+> Libraries Used:
    - `numpy==2.2.3` for numerical computations
    - `matplotlib` for visualization
    - `scikit-learn==1.6.1` for comparison with MLPClassifier
