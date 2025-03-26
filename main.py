@@ -24,10 +24,10 @@ if __name__ == "__main__":
     
     ffnn = FFNN(
         input_size=4,
-        hidden_size=5,
+        hidden_sizes=[10, 5],
         output_size=3,
         learning_rate=0.1,
-        hidden_activation='relu',
+        hidden_activations=['relu', 'relu'],
         output_activation='sigmoid', 
         loss_function='mse',                 
     )
