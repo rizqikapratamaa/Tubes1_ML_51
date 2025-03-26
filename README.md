@@ -86,6 +86,7 @@ Libraries Used:
 ```sh
  python3 main.py
 ```
+</details>
 
 ## Bonus 🤑
 <details>
