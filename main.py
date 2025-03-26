@@ -24,7 +24,7 @@ if __name__ == "__main__":
     
     ffnn = FFNN(
         input_size=4,
-        hidden_sizes=[10, 5],
+        hidden_sizes=[5, 5],
         output_size=3,
         learning_rate=0.1,
         hidden_activations=['relu', 'relu'],
@@ -47,3 +47,5 @@ if __name__ == "__main__":
     ffnn.plot_training_history()
     ffnn.plot_weight_distributions()
     ffnn.plot_gradient_distributions()
+
+    ffnn.visualize_network()

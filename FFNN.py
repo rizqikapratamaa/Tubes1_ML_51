@@ -267,12 +267,6 @@ class FFNN:
         plt.show()
     
     def get_layer_weights(self, layer_index):
-        """
-        Mengembalikan bobot untuk layer tertentu.
-        - layer_index 0 sampai num_hidden_layers-1: weights antar hidden layer
-        - layer_index num_hidden_layers: weights hidden terakhir ke output
-        - layer_index num_hidden_layers+1 dan seterusnya: bias untuk setiap layer
-        """
         total_weight_layers = self.num_hidden_layers + 1  # Jumlah matriks bobot
         if layer_index < total_weight_layers:
             return [w.value for row in self.weights[layer_index] for w in row]
@@ -283,12 +277,6 @@ class FFNN:
             raise ValueError(f"Layer index harus antara 0 dan {total_weight_layers + self.num_hidden_layers}")
 
     def get_layer_gradients(self, layer_index):
-        """
-        Mengembalikan gradien untuk layer tertentu.
-        - layer_index 0 sampai num_hidden_layers-1: gradien weights antar hidden layer
-        - layer_index num_hidden_layers: gradien weights hidden terakhir ke output
-        - layer_index num_hidden_layers+1 dan seterusnya: gradien bias untuk setiap layer
-        """
         total_weight_layers = self.num_hidden_layers + 1
         if layer_index < total_weight_layers:
             return [w.gradient for row in self.weights[layer_index] for w in row]
@@ -299,9 +287,6 @@ class FFNN:
             raise ValueError(f"Layer index harus antara 0 dan {total_weight_layers + self.num_hidden_layers}")
 
     def get_layer_name(self, layer_index):
-        """
-        Mengembalikan nama layer berdasarkan indeks.
-        """
         total_weight_layers = self.num_hidden_layers + 1
         if layer_index < total_weight_layers:
             if layer_index == 0:
@@ -376,4 +361,63 @@ class FFNN:
             axes[i].grid(alpha=0.3)
         
         plt.tight_layout()
+        plt.show()
+
+    def visualize_network(self):
+        fig, ax = plt.subplots(figsize=(12, 8))
+        ax.set_title("Feedforward Neural Network Structure")
+
+        layer_sizes = [self.input_size] + self.hidden_sizes + [self.output_size]
+        num_layers = len(layer_sizes)
+
+        layer_spacing = 1.0
+        max_neurons = max(layer_sizes)
+        neuron_spacing = 1.0 / (max_neurons + 1)
+
+        neuron_positions = {}
+        for layer_idx, size in enumerate(layer_sizes):
+            x = layer_idx * layer_spacing
+            for neuron_idx in range(size):
+                y = (max_neurons / 2 - size / 2 + neuron_idx + 0.5) * neuron_spacing
+                neuron_positions[(layer_idx, neuron_idx)] = (x, y)
+
+        for (layer_idx, neuron_idx), (x, y) in neuron_positions.items():
+            if layer_idx == 0:
+                label = f"I{neuron_idx}"
+            elif layer_idx == num_layers - 1:
+                label = f"O{neuron_idx}"
+                bias = self.biases[-1][neuron_idx].value
+                ax.text(x, y + 0.05, f"b={bias:.2f}", fontsize=8, ha='center')
+            else:
+                label = f"H{layer_idx-1}_{neuron_idx}"
+                bias = self.biases[layer_idx-1][neuron_idx].value
+                ax.text(x, y + 0.05, f"b={bias:.2f}", fontsize=8, ha='center')
+            ax.scatter(x, y, s=100, label=label if neuron_idx == 0 else None)
+            ax.text(x, y, label, fontsize=8, ha='center', va='center', color='white')
+
+        for layer_idx in range(num_layers - 1):
+            for i in range(layer_sizes[layer_idx]):
+                for j in range(layer_sizes[layer_idx + 1]):
+                    x1, y1 = neuron_positions[(layer_idx, i)]
+                    x2, y2 = neuron_positions[(layer_idx + 1, j)]
+                    w = self.weights[layer_idx][i][j].value
+                    g = self.weights[layer_idx][i][j].gradient
+                    ax.plot([x1, x2], [y1, y2], 'k-', alpha=0.2)
+                    mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
+                    ax.text(mid_x, mid_y, f"w={w:.2f}\ng={g:.2f}", fontsize=6, alpha=0.7)
+
+        for layer_idx, size in enumerate(layer_sizes):
+            x = layer_idx * layer_spacing
+            y = max_neurons * neuron_spacing + 0.1
+            if layer_idx == 0:
+                ax.text(x, y, "Input Layer", ha='center')
+            elif layer_idx == num_layers - 1:
+                ax.text(x, y, f"Output Layer\n{self.output_activation}", ha='center')
+            else:
+                ax.text(x, y, f"Hidden Layer {layer_idx}\n{self.hidden_activations[layer_idx-1]}", ha='center')
+
+        ax.set_xlim(-0.5, (num_layers - 1) * layer_spacing + 0.5)
+        ax.set_ylim(-0.1, max_neurons * neuron_spacing + 0.3)
+        ax.set_aspect('equal')
+        ax.axis('off')
         plt.show()
