@@ -6,23 +6,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score
+from tqdm import tqdm
 
 class FFNN:
-    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5, hidden_activation="sigmoid", 
-                 output_activation="sigmoid", zero_init=False, init_type="uniform", 
+    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.5, batch_size=1, hidden_activation="sigmoid", 
+                 output_activation="sigmoid", loss_function='mse', verbose=0, zero_init=False, init_type="uniform", 
                  lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None):
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.learning_rate = learning_rate
+        self.batch_size = batch_size
         self.hidden_activation = hidden_activation.lower()
         self.output_activation = output_activation.lower()
+        self.loss_function = loss_function.lower()
+        self.verbose = verbose
+
         valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax', 'leaky_relu', 'elu'}
-        
+        valid_losses = {'mse', 'cce', 'bce'}
+
         if self.hidden_activation not in valid_activations:
             raise ValueError(f"Hidden activations should be one of: {valid_activations}")
         if self.output_activation not in valid_activations:
             raise ValueError(f"Output activations should be one of: {valid_activations}")
+        if self.loss_function not in valid_losses:
+            raise ValueError(f"Loss function should be one of: {valid_losses}")
         
         # set random seed
         if seed is not None:
@@ -120,19 +128,37 @@ class FFNN:
         if self.output_activation == 'softmax':
             return cce(outputs, targets, self.output_size)
         else:
-            loss = Node(0.0)
-            for i in range(self.output_size):
-                diff = outputs[i] + Node(-targets[i])
-                loss = loss + (diff * diff)
-            loss = loss * Node(1.0 / self.output_size)
-            return loss 
+            if self.loss_function == 'cce':
+                return cce(outputs, targets, self.output_size)
+            elif self.loss_function == 'bce':
+                return bce(outputs, targets)
+            else: # default mse
+                loss = Node(0.0)
+                for i in range(self.output_size):
+                    diff = outputs[i] + Node(-targets[i])
+                    loss = loss + (diff * diff)
+                loss = loss * Node(1.0 / self.output_size)
+                return loss 
     
     def train(self, training_data, target_data, validation_data, validation_target, epochs):
         for epoch in range(epochs):
             total_loss = 0
             total_val_loss = 0
-            # training phase
-            for inputs, target in zip(training_data, target_data):
+            
+            # Training phase with batching
+            num_batches = math.ceil(len(training_data) / self.batch_size)
+            if self.verbose == 1:
+                pbar = tqdm(range(num_batches), desc=f"Epoch {epoch+1}/{epochs}")
+            else:
+                pbar = range(num_batches)
+                
+            for batch_idx in pbar:
+                start_idx = batch_idx * self.batch_size
+                end_idx = min((batch_idx + 1) * self.batch_size, len(training_data))
+                batch_inputs = training_data[start_idx:end_idx]
+                batch_targets = target_data[start_idx:end_idx]
+                
+                # Reset gradients
                 for row in self.weights_input_hidden:
                     for w in row:
                         w.gradient = 0.0
@@ -143,13 +169,19 @@ class FFNN:
                     b.gradient = 0.0
                 for b in self.bias_output:
                     b.gradient = 0.0
-                _, outputs = self.feedforward(inputs)
-                loss = self.compute_loss(outputs, target)
-                total_loss += loss.value
-                # print(f"Before backward: w[0][0].gradient = {self.weights_input_hidden[0][0].gradient}")
-                loss.backward()
-                # print(f"After backward: w[0][0].gradient = {self.weights_input_hidden[0][0].gradient}")
-                # update weights and biases base on gradient
+                
+                # Forward and backward pass for batch
+                batch_loss = Node(0.0)
+                for inputs, target in zip(batch_inputs, batch_targets):
+                    _, outputs = self.feedforward(inputs)
+                    loss = self.compute_loss(outputs, target)
+                    batch_loss = batch_loss + loss
+                batch_loss = batch_loss * Node(1.0 / len(batch_inputs))
+                total_loss += batch_loss.value
+                
+                batch_loss.backward()
+                
+                # Update weights
                 for i in range(self.input_size):
                     for j in range(self.hidden_size):
                         w = self.weights_input_hidden[i][j]
@@ -162,19 +194,24 @@ class FFNN:
                     self.bias_hidden[i].value -= self.learning_rate * self.bias_hidden[i].gradient
                 for i in range(self.output_size):
                     self.bias_output[i].value -= self.learning_rate * self.bias_output[i].gradient
+                
+                if self.verbose == 1:
+                    avg_train_loss = total_loss / (batch_idx + 1)
+                    pbar.set_postfix({'train_loss': f'{avg_train_loss:.4f}'})
             
-            # validation phase
+            # Validation phase
             for inputs, target in zip(validation_data, validation_target):
                 _, outputs = self.feedforward(inputs)
                 loss = self.compute_loss(outputs, target)
                 total_val_loss += loss.value
             
-            avg_train_loss = total_loss / len(training_data)
+            avg_train_loss = total_loss / num_batches
             avg_val_loss = total_val_loss / len(validation_data)
             self.history["train_loss"].append(avg_train_loss)
             self.history["val_loss"].append(avg_val_loss)
             
-            print(f"Epoch {epoch}, Loss: {avg_train_loss:.4f}")
+            if self.verbose == 1:
+                pbar.set_postfix({'train_loss': f'{avg_train_loss:.4f}', 'val_loss': f'{avg_val_loss:.4f}'})
     
     def predict(self, inputs):
         _, output = self.feedforward(inputs)
