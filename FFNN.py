@@ -163,19 +163,50 @@ class FFNN:
 
         layer_outputs.append(output_layer)
         return layer_outputs
+
+    # cross categorical entropy
+    def cce(self, outputs, targets, output_size):
+        loss = Node(0.0)
+        batch_size = len(outputs)
+        for i in range(batch_size):
+            loss = loss + (Node(-targets[i]) * Node(math.log(outputs[i].value + 1e-15)))
+        loss = loss * Node(1.0 / output_size)
+        return loss
+
+    # binary cross entropy
+    def bce(self, outputs, targets):
+        loss = Node(0.0)
+        batch_size = len(targets) 
+
+        for i in range(batch_size):
+            prob = outputs[i].value 
+            target = targets[i]
+            
+            # clipping
+            prob = max(min(prob, 1 - 1e-15), 1e-15)
+
+            # bce formula: - (y log(p) + (1 - y) log(1 - p))
+            loss = loss + Node(-target) * Node(math.log(prob)) + Node(-(1 - target)) * Node(math.log(1 - prob))
+
+        loss = loss * Node(1.0 / batch_size) 
+        return loss
+
+    def mse(self, outputs, targets, output_size):
+        loss = Node(0.0)
+        for i in range(output_size):
+            diff = outputs[i] + Node(-targets[i])
+            loss = loss + (diff * diff)
+        loss = loss * Node(1.0 / output_size)
+        return loss 
+
     
     def compute_loss(self, outputs, targets):
         if self.loss_function == 'cce':
-            return cce(outputs, targets, self.output_size)
+            return self.cce(outputs, targets, self.output_size)
         elif self.loss_function == 'bce':
-            return bce(outputs, targets)
+            return self.bce(outputs, targets)
         else: # default mse
-            loss = Node(0.0)
-            for i in range(self.output_size):
-                diff = outputs[i] + Node(-targets[i])
-                loss = loss + (diff * diff)
-            loss = loss * Node(1.0 / self.output_size)
-            return loss 
+            return self.mse(outputs, targets, self.output_size)
             
     def compute_regularization_loss(self):
         reg_loss = Node(0.0)
