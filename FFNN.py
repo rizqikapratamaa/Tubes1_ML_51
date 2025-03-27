@@ -81,6 +81,17 @@ class FFNN:
                          for _ in range(layer_sizes[i])]
                     b = [Node(np.random.normal(mean, math.sqrt(variance))) 
                          for _ in range(layer_sizes[i+1])]
+                elif init_type == "xavier":
+                    scale = np.sqrt(1 / layer_sizes[i])
+                    w = [[Node(np.random.normal(0, scale)) 
+                        for _ in range(layer_sizes[i+1])] for _ in range(layer_sizes[i])]
+                    b = [Node(0.0) for _ in range(layer_sizes[i+1])]
+
+                elif init_type == "he":
+                    scale = np.sqrt(2 / layer_sizes[i])
+                    w = [[Node(np.random.normal(0, scale)) 
+                        for _ in range(layer_sizes[i+1])] for _ in range(layer_sizes[i])]
+                    b = [Node(0.0) for _ in range(layer_sizes[i+1])]
                 else:
                     raise ValueError("init_type should be 'uniform' or 'normal'")
             else:
