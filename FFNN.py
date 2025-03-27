@@ -81,18 +81,26 @@ class FFNN:
                          for _ in range(layer_sizes[i])]
                     b = [Node(np.random.normal(mean, math.sqrt(variance))) 
                          for _ in range(layer_sizes[i+1])]
-                elif init_type == "xavier":
-                    scale = np.sqrt(1 / layer_sizes[i])
-                    w = [[Node(np.random.normal(0, scale)) 
-                        for _ in range(layer_sizes[i+1])] for _ in range(layer_sizes[i])]
+                elif init_type == "xavier_uniform":
+                    limit = np.sqrt(6 / (layer_sizes[i] + layer_sizes[i+1]))
+                    w = [[Node(np.random.uniform(-limit, limit)) 
+                          for _ in range(layer_sizes[i+1])] 
+                         for _ in range(layer_sizes[i])]
+                    b = [Node(0.0) for _ in range(layer_sizes[i+1])]
+                elif init_type == "xavier_normal":
+                    stddev = np.sqrt(2 / (layer_sizes[i] + layer_sizes[i+1]))
+                    w = [[Node(np.random.normal(0, stddev)) 
+                          for _ in range(layer_sizes[i+1])] 
+                         for _ in range(layer_sizes[i])]
                     b = [Node(0.0) for _ in range(layer_sizes[i+1])]
                 elif init_type == "he":
-                    scale = np.sqrt(2 / layer_sizes[i])
-                    w = [[Node(np.random.normal(0, scale)) 
-                        for _ in range(layer_sizes[i+1])] for _ in range(layer_sizes[i])]
+                    stddev = np.sqrt(2 / layer_sizes[i])
+                    w = [[Node(np.random.normal(0, stddev)) 
+                          for _ in range(layer_sizes[i+1])] 
+                         for _ in range(layer_sizes[i])]
                     b = [Node(0.0) for _ in range(layer_sizes[i+1])]
                 else:
-                    raise ValueError("init_type should be 'uniform', 'normal', 'xavier', or 'he'")
+                    raise ValueError("init_type should be 'uniform', 'normal', 'xavier_uniform', 'xavier_normal', or 'he'")
             else:
                 w = [[Node(0.0) for _ in range(layer_sizes[i+1])] 
                      for _ in range(layer_sizes[i])]
