@@ -35,13 +35,6 @@ class Node:
         result.parent = [(self, value)] # d/dx e^x = e^x
         result.op = "exp"
         return result
-        
-    def __truediv__(self, other):
-        other = other if isinstance(other, Node) else Node(other)
-        result = Node(self.value / other.value)
-        result.parent = [(self, 1.0 / other.value), (other, -self.value / (other.value ** 2))]
-        result.op = "div"
-        return result
 
     def linear(self):
         result = Node(self.value)
