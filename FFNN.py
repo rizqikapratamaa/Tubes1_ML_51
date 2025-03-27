@@ -1,5 +1,4 @@
 from Node import Node
-from loss import *
 import random
 import math
 import numpy as np
