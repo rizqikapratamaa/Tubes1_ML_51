@@ -111,12 +111,13 @@ class FFNN:
             raise ValueError(f"Unknown activation type: {activation_type}")
     
     def apply_softmax(self, nodes):
-        # apply softmax ke list of nodes
-        max_val = max(n.value for n in nodes)
-        exp_vals = [Node(math.exp(n.value - max_val)) for n in nodes]
-        sum_exp = sum(n.value for n in exp_vals)
-        
-        return [Node(n.value / sum_exp) for n in exp_vals]
+        max_val = Node(max(n.value for n in nodes))
+        exp_vals = [n - max_val for n in nodes]    
+        exp_vals = [n.exp() for n in exp_vals]     
+        sum_exp = exp_vals[0]
+        for i in range(1, len(exp_vals)):
+            sum_exp = sum_exp + exp_vals[i]        
+        return [n / sum_exp for n in exp_vals]     
     
     def feedforward(self, inputs):
         inputs = [Node(x) for x in inputs]
@@ -164,20 +165,17 @@ class FFNN:
         return layer_outputs
     
     def compute_loss(self, outputs, targets):
-        if self.output_activation == 'softmax':
+        if self.loss_function == 'cce':
             return cce(outputs, targets, self.output_size)
-        else:
-            if self.loss_function == 'cce':
-                return cce(outputs, targets, self.output_size)
-            elif self.loss_function == 'bce':
-                return bce(outputs, targets)
-            else: # default mse
-                loss = Node(0.0)
-                for i in range(self.output_size):
-                    diff = outputs[i] + Node(-targets[i])
-                    loss = loss + (diff * diff)
-                loss = loss * Node(1.0 / self.output_size)
-                return loss 
+        elif self.loss_function == 'bce':
+            return bce(outputs, targets)
+        else: # default mse
+            loss = Node(0.0)
+            for i in range(self.output_size):
+                diff = outputs[i] + Node(-targets[i])
+                loss = loss + (diff * diff)
+            loss = loss * Node(1.0 / self.output_size)
+            return loss 
             
     def compute_regularization_loss(self):
         reg_loss = Node(0.0)

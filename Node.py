@@ -21,7 +21,28 @@ class Node:
         result.parent = [(self, other.value), (other, self.value)] # local gradient
         result.op = "mul"
         return result
-    
+
+    def __sub__(self, other):
+        other = other if isinstance(other, Node) else Node(other)
+        result = Node(self.value - other.value)
+        result.parent = [(self, 1.0), (other, -1.0)]
+        result.op = "sub"
+        return result
+
+    def exp(self):
+        value = math.exp(self.value)
+        result = Node(value)
+        result.parent = [(self, value)] # d/dx e^x = e^x
+        result.op = "exp"
+        return result
+        
+    def __truediv__(self, other):
+        other = other if isinstance(other, Node) else Node(other)
+        result = Node(self.value / other.value)
+        result.parent = [(self, 1.0 / other.value), (other, -self.value / (other.value ** 2))]
+        result.op = "div"
+        return result
+
     def linear(self):
         result = Node(self.value)
         result.parent = [(self, 1.0)]

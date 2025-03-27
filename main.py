@@ -44,7 +44,7 @@ if __name__ == "__main__":
         if predicted_class == actual_class:
             correct += 1
     
-    # print(f"Akurasi: {correct / len(y_test) * 100:.2f}%")
+    print(f"Akurasi: {correct / len(y_test) * 100:.2f}%")
 
     ffnn.compare_lib(X_train, y_train, X_test, y_test)
     ffnn.plot_training_history()
