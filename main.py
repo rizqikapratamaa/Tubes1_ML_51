@@ -31,7 +31,8 @@ if __name__ == "__main__":
         output_activation='sigmoid', 
         loss_function='mse',      
         reg_type='l1',
-        reg_lambda=0.001        
+        reg_lambda=0.001,
+        rms_norm=True    
     )
     ffnn.train(X_train, y_train, X_val, y_val, epochs=20, batch_size=1, verbose=1)
     

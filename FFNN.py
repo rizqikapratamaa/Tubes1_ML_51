@@ -11,7 +11,8 @@ from tqdm import tqdm
 class FFNN:
     def __init__(self, input_size, hidden_sizes, output_size, learning_rate=0.5, hidden_activations="sigmoid", 
                  output_activation="sigmoid", loss_function='mse', zero_init=False, init_type="uniform", 
-                 lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None, reg_type='none', reg_lambda = 0.01):
+                 lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None, reg_type='none', reg_lambda = 0.01,
+                 rms_norm=False, rms_epsilon=1e-8):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.num_hidden_layers = len(hidden_sizes)
@@ -20,6 +21,11 @@ class FFNN:
         self.loss_function = loss_function.lower()
         self.reg_type = reg_type.lower()
         self.reg_lambda = reg_lambda
+        self.rms_norm = rms_norm
+        self.rms_epsilon = rms_epsilon
+
+        self.rms_weights_cache = []
+        self.rms_biases_cache = []
 
         valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax', 'leaky_relu', 'elu'}
         valid_losses = {'mse', 'cce', 'bce'}
@@ -55,6 +61,12 @@ class FFNN:
 
         layer_sizes = [input_size] + hidden_sizes+ [output_size]
 
+        if self.rms_norm:
+            for i in range(len(layer_sizes) - 1):
+                weight_cache = [[Node(0.0) for _ in range(layer_sizes[i+1])] for _ in range(layer_sizes[i])]
+                bias_cache = [Node(0.0) for _ in range(layer_sizes[i+1])]
+                self.rms_weights_cache.append(weight_cache)
+                self.rms_biases_cache.append(bias_cache)
         
         for i in range(len(layer_sizes) - 1):
             if not zero_init:
@@ -239,10 +251,22 @@ class FFNN:
                                 w.gradient += self.reg_lambda * (1.0 if w.value > 0 else -1.0 if w.value < 0 else 0.0)
                             elif self.reg_type == 'l2':
                                 w.gradient += self.reg_lambda * w.value
-                            w.value -= self.learning_rate * w.gradient
+                            if self.rms_norm:
+                                rms_cache_w = self.rms_weights_cache[layer_idx][i][j]
+                                rms_cache_w.value = 0.9 * rms_cache_w.value + 0.1 * (w.gradient ** 2)
+                                adjusted_lr = self.learning_rate / (math.sqrt(rms_cache_w.value + self.rms_epsilon))
+                                w.value -= adjusted_lr * w.gradient
+                            else:
+                                w.value -= self.learning_rate * w.gradient
                     for i in range(len(self.biases[layer_idx])):
                         b = self.biases[layer_idx][i]
-                        b.value -= self.learning_rate * b.gradient
+                        if self.rms_norm:
+                            rms_cache_b = self.rms_biases_cache[layer_idx][i]
+                            rms_cache_b.value = 0.9 * rms_cache_b.value + 0.1 * (b.gradient ** 2)
+                            adjusted_lr = self.learning_rate / (math.sqrt(rms_cache_b.value + self.rms_epsilon))
+                            b.value -= adjusted_lr * b.gradient
+                        else:
+                            b.value -= self.learning_rate * b.gradient
 
                 if verbose == 1:
                     avg_train_loss = total_loss / (batch_idx + 1)
