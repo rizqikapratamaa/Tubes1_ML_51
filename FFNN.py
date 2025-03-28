@@ -1,6 +1,5 @@
-import math
+import math, os
 import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
@@ -216,189 +215,106 @@ class FFNN:
     
     # compare sama sklearn MLP
     def compare_lib(self, X_train, y_train, X_test, y_test):
+        from sklearn.metrics import accuracy_score
+        
         mlp_activation = self.hidden_activations[0] if self.hidden_activations[0] in {'relu', 'sigmoid', 'tanh'} else 'relu'
         mlp = MLPClassifier(hidden_layer_sizes=tuple(self.hidden_sizes), 
                             activation=mlp_activation, 
                             solver='sgd', 
                             learning_rate_init=self.learning_rate, 
-                            random_state=42)
+                            random_state=42,
+                            max_iter=200)
         
-        y_train_mlp = [t.index(1) for t in y_train]
+        y_train_mlp = np.argmax(y_train, axis=1)
         mlp.fit(X_train, y_train_mlp)
 
-        y_pred_ffnn = [self.predict(x).index(max(self.predict(x))) for x in X_test]
+        y_pred_ffnn = [np.argmax(self.predict(x)) for x in X_test]
+        
         y_pred_mlp = mlp.predict(X_test)
 
-        y_test_true = [t.index(1) for t in y_test]
+        y_test_true = np.argmax(y_test, axis=1)
+        
         acc_ffnn = accuracy_score(y_test_true, y_pred_ffnn)
         acc_mlp = accuracy_score(y_test_true, y_pred_mlp)
 
         print(f"Accuracy FFNN: {acc_ffnn * 100:.2f}%")
         print(f"Accuracy MLP Sklearn: {acc_mlp * 100:.2f}%")
-    
-    def plot_training_history(self):
-        plt.figure(figsize=(8, 5))
-        plt.plot(self.history['train_loss'], label='Training Loss', marker='o', markersize=2)
-        plt.plot(self.history['val_loss'], label='Validation Loss', marker='s', markersize=2)
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss')
-        plt.title('Training and Validation Loss')
-        plt.legend()
-        plt.grid()
-        plt.show()
-    
-    def get_layer_weights(self, layer_index):
-        total_weight_layers = self.num_hidden_layers + 1  # Number of weight matrices
-        if layer_index < total_weight_layers:
-            return [w for row in self.weights[layer_index] for w in row]  # Flatten weights
-        elif layer_index < total_weight_layers + self.num_hidden_layers + 1:
-            bias_idx = layer_index - total_weight_layers
-            return [b for b in self.biases[bias_idx]]  # Return biases as a flat list
-        else:
-            raise ValueError(f"Layer index must be between 0 and {total_weight_layers + self.num_hidden_layers}")
 
-    def get_layer_gradients(self, layer_index):
-        total_weight_layers = self.num_hidden_layers + 1
-        if layer_index < total_weight_layers:
-            return [g for row in self.weights_grad[layer_index] for g in row]  # Flatten gradients
-        elif layer_index < total_weight_layers + self.num_hidden_layers + 1:
-            bias_idx = layer_index - total_weight_layers
-            return [g for g in self.biases_grad[bias_idx]]  # Return bias gradients
-        else:
-            raise ValueError(f"Layer index must be between 0 and {total_weight_layers + self.num_hidden_layers}")
-
-    def get_layer_name(self, layer_index):
-        total_weight_layers = self.num_hidden_layers + 1
-        if layer_index < total_weight_layers:
-            if layer_index == 0:
-                return "Input-Hidden1 Weights"
-            elif layer_index < self.num_hidden_layers:
-                return f"Hidden{layer_index}-Hidden{layer_index+1} Weights"
-            else:
-                return f"Hidden{self.num_hidden_layers}-Output Weights"
-        elif layer_index < total_weight_layers + self.num_hidden_layers + 1:
-            bias_idx = layer_index - total_weight_layers
-            if bias_idx < self.num_hidden_layers:
-                return f"Hidden{bias_idx+1} Bias"
-            else:
-                return "Output Bias"
-        else:
-            return f"Unknown Layer {layer_index}"
-
-    def plot_weight_distributions(self, layers_to_plot=None):
-        if layers_to_plot is None:
-            layers_to_plot = list(range(self.num_hidden_layers + 1 + self.num_hidden_layers + 1))  # Semua weights dan biases
+    def save_model(self, filename="ffnn_model.npz"):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        filepath = os.path.join(current_dir, filename)
         
-        n_plots = len(layers_to_plot)
-        if n_plots == 0:
-            print("Tidak ada layer yang ditentukan untuk ditampilkan.")
-            return
+        model_params = {
+            'input_size': self.input_size,
+            'hidden_sizes': self.hidden_sizes,
+            'output_size': self.output_size,
+            'learning_rate': self.learning_rate,
+            'hidden_activations': self.hidden_activations,
+            'output_activation': self.output_activation,
+            'loss_function': self.loss_function,
+            'reg_type': self.reg_type,
+            'reg_lambda': self.reg_lambda,
+            'rms_norm': self.rms_norm,
+            'rms_epsilon': self.rms_epsilon
+        }
         
-        fig, axes = plt.subplots(1, n_plots, figsize=(5 * n_plots, 5))
-        if n_plots == 1:
-            axes = [axes]
+        for i in range(len(self.weights)):
+            model_params[f'weights_{i}'] = self.weights[i]
+            model_params[f'biases_{i}'] = self.biases[i]
+        
+        if self.rms_norm:
+            for i in range(len(self.rms_weights_cache)):
+                model_params[f'rms_weights_cache_{i}'] = self.rms_weights_cache[i]
+                model_params[f'rms_biases_cache_{i}'] = self.rms_biases_cache[i]
+        
+        model_params['history'] = self.history
+        
+        np.savez(filepath, **model_params)
+        print(f"Model saved to {filepath}")
 
-        for i, layer_idx in enumerate(layers_to_plot):
-            weights = self.get_layer_weights(layer_idx)
-            layer_name = self.get_layer_name(layer_idx)
+    @classmethod
+    def load_model(cls, filename="ffnn_model.npz"):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        filepath = os.path.join(current_dir, filename)
+        
+        data = np.load(filepath, allow_pickle=True)
+        
+        input_size = int(data['input_size'])
+        hidden_sizes = data['hidden_sizes'].tolist()
+        output_size = int(data['output_size'])
+        learning_rate = float(data['learning_rate'])
+        hidden_activations = data['hidden_activations'].tolist()
+        output_activation = str(data['output_activation'])
+        loss_function = str(data['loss_function'])
+        reg_type = str(data['reg_type'])
+        reg_lambda = float(data['reg_lambda'])
+        rms_norm = bool(data['rms_norm'])
+        rms_epsilon = float(data['rms_epsilon'])
+        
+        model = cls(
+            input_size=input_size,
+            hidden_sizes=hidden_sizes,
+            output_size=output_size,
+            learning_rate=learning_rate,
+            hidden_activations=hidden_activations,
+            output_activation=output_activation,
+            loss_function=loss_function,
+            reg_type=reg_type,
+            reg_lambda=reg_lambda,
+            rms_norm=rms_norm,
+            rms_epsilon=rms_epsilon
+        )
+        
+        num_layers = len(hidden_sizes) + 1
+        for i in range(num_layers):
+            model.weights[i] = data[f'weights_{i}']
+            model.biases[i] = data[f'biases_{i}']
             
-            axes[i].hist(weights, bins=30, alpha=0.7)
-            axes[i].set_title(f"Weight Distribution - {layer_name}")
-            axes[i].set_xlabel("Weights")
-            axes[i].set_ylabel("Frequency")
-            axes[i].grid(alpha=0.3)
+            if rms_norm:
+                model.rms_weights_cache[i] = data[f'rms_weights_cache_{i}']
+                model.rms_biases_cache[i] = data[f'rms_biases_cache_{i}']
         
-        plt.tight_layout()
-        plt.show()
-
-    def plot_gradient_distributions(self, layers_to_plot=None):
-        if layers_to_plot is None:
-            layers_to_plot = list(range(self.num_hidden_layers + 1 + self.num_hidden_layers + 1))
+        model.history = data['history'].item()
         
-        n_plots = len(layers_to_plot)
-        if n_plots == 0:
-            print("Tidak ada layer yang ditentukan untuk ditampilkan.")
-            return
-        
-        fig, axes = plt.subplots(1, n_plots, figsize=(5 * n_plots, 5))
-        if n_plots == 1:
-            axes = [axes]
-
-        for i, layer_idx in enumerate(layers_to_plot):
-            gradients = self.get_layer_gradients(layer_idx)
-            layer_name = self.get_layer_name(layer_idx)
-            
-            if all(g == 0 for g in gradients):
-                axes[i].text(0.5, 0.5, "Semua gradien bernilai 0", 
-                             horizontalalignment='center',
-                             verticalalignment='center',
-                             transform=axes[i].transAxes)
-            else:
-                axes[i].hist(gradients, bins=30, alpha=0.7)
-            
-            axes[i].set_title(f"Gradient Distribution - {layer_name}")
-            axes[i].set_xlabel("Gradients")
-            axes[i].set_ylabel("Frequency")
-            axes[i].grid(alpha=0.3)
-        
-        plt.tight_layout()
-        plt.show()
-
-    def visualize_network(self):
-        fig, ax = plt.subplots(figsize=(12, 8))
-        ax.set_title("Feedforward Neural Network Structure")
-
-        layer_sizes = [self.input_size] + self.hidden_sizes + [self.output_size]
-        num_layers = len(layer_sizes)
-
-        layer_spacing = 1.0
-        max_neurons = max(layer_sizes)
-        neuron_spacing = 1.0 / (max_neurons + 1)
-
-        neuron_positions = {}
-        for layer_idx, size in enumerate(layer_sizes):
-            x = layer_idx * layer_spacing
-            for neuron_idx in range(size):
-                y = (max_neurons / 2 - size / 2 + neuron_idx + 0.5) * neuron_spacing
-                neuron_positions[(layer_idx, neuron_idx)] = (x, y)
-
-        for (layer_idx, neuron_idx), (x, y) in neuron_positions.items():
-            if layer_idx == 0:
-                label = f"I{neuron_idx}"
-            elif layer_idx == num_layers - 1:
-                label = f"O{neuron_idx}"
-                bias = self.biases[-1][neuron_idx]  # No .value needed
-                ax.text(x, y + 0.05, f"b={bias:.2f}", fontsize=8, ha='center')
-            else:
-                label = f"H{layer_idx-1}_{neuron_idx}"
-                bias = self.biases[layer_idx-1][neuron_idx]  # No .value needed
-                ax.text(x, y + 0.05, f"b={bias:.2f}", fontsize=8, ha='center')
-            ax.scatter(x, y, s=100, label=label if neuron_idx == 0 else None)
-            ax.text(x, y, label, fontsize=8, ha='center', va='center', color='white')
-
-        for layer_idx in range(num_layers - 1):
-            for i in range(layer_sizes[layer_idx]):
-                for j in range(layer_sizes[layer_idx + 1]):
-                    x1, y1 = neuron_positions[(layer_idx, i)]
-                    x2, y2 = neuron_positions[(layer_idx + 1, j)]
-                    w = self.weights[layer_idx][i][j]  # No .value needed
-                    g = self.weights_grad[layer_idx][i][j]  # No .gradient needed
-                    ax.plot([x1, x2], [y1, y2], 'k-', alpha=0.2)
-                    mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
-                    ax.text(mid_x, mid_y, f"w={w:.2f}\ng={g:.2f}", fontsize=6, alpha=0.7)
-
-        for layer_idx, size in enumerate(layer_sizes):
-            x = layer_idx * layer_spacing
-            y = max_neurons * neuron_spacing + 0.1
-            if layer_idx == 0:
-                ax.text(x, y, "Input Layer", ha='center')
-            elif layer_idx == num_layers - 1:
-                ax.text(x, y, f"Output Layer\n{self.output_activation}", ha='center')
-            else:
-                ax.text(x, y, f"Hidden Layer {layer_idx}\n{self.hidden_activations[layer_idx-1]}", ha='center')
-
-        ax.set_xlim(-0.5, (num_layers - 1) * layer_spacing + 0.5)
-        ax.set_ylim(-0.1, max_neurons * neuron_spacing + 0.3)
-        ax.set_aspect('equal')
-        ax.axis('off')
-        plt.show()
+        print(f"Model loaded from {filepath}")
+        return model
