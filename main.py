@@ -3,7 +3,70 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.datasets import fetch_openml
 import numpy as np
+import matplotlib.pyplot as plt
+import networkx as nx
+from IPython.display import display
 from FFNN import FFNN
+
+def visualize_network_light(ffnn):
+    # Membuat graf directed
+    G = nx.DiGraph()
+    
+    # Menentukan ukuran layer
+    layer_sizes = [ffnn.input_size] + ffnn.hidden_sizes + [ffnn.output_size]
+    num_layers = len(layer_sizes)
+    
+    # Menambahkan node untuk setiap neuron
+    node_positions = {}
+    for layer_idx, size in enumerate(layer_sizes):
+        for neuron_idx in range(size):
+            node_id = f"L{layer_idx}N{neuron_idx}"
+            G.add_node(node_id)
+            # Posisi sederhana: layer_idx sebagai x, neuron_idx sebagai y
+            node_positions[node_id] = (layer_idx, -neuron_idx)
+    
+    # Menambahkan edge antar layer (hanya koneksi tanpa bobot untuk efisiensi)
+    for layer_idx in range(num_layers - 1):
+        for i in range(layer_sizes[layer_idx]):
+            for j in range(layer_sizes[layer_idx + 1]):
+                G.add_edge(f"L{layer_idx}N{i}", f"L{layer_idx + 1}N{j}")
+    
+    # Setup visualisasi
+    plt.figure(figsize=(10, 6))
+    
+    # Menggambar graf
+    nx.draw_networkx(
+        G,
+        pos=node_positions,
+        node_size=300,
+        node_color='skyblue',
+        font_size=8,
+        arrows=False,  # Menghilangkan panah untuk performa
+        with_labels=True,
+        edge_color='gray',
+        alpha=0.6
+    )
+    
+    # Menambahkan label layer
+    for layer_idx, size in enumerate(layer_sizes):
+        if layer_idx == 0:
+            label = "Input"
+        elif layer_idx == len(layer_sizes) - 1:
+            label = f"Output\n{ffnn.output_activation}"
+        else:
+            label = f"Hidden {layer_idx}\n{ffnn.hidden_activations[layer_idx-1]}"
+        plt.text(layer_idx, 1, label, 
+                horizontalalignment='center', 
+                verticalalignment='bottom',
+                fontsize=10)
+    
+    plt.title("Lightweight Neural Network Visualization")
+    plt.axis('off')
+    plt.tight_layout()
+    
+    # Tampilkan di Jupyter Notebook
+    display(plt.gcf())
+    plt.close()
 
 def preprocess_mnist(num_samples=20000):
     mnist = fetch_openml('mnist_784', version=1, as_frame=False)
@@ -73,4 +136,4 @@ if __name__ == "__main__":
     ffnn.plot_training_history()
     ffnn.plot_weight_distributions()
     ffnn.plot_gradient_distributions()
-    ffnn.visualize_network()
+    visualize_network_light(ffnn)
