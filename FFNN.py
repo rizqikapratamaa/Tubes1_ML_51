@@ -1,5 +1,3 @@
-from Node import Node
-import random
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,7 +6,7 @@ from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 
 class FFNN:
-    def __init__(self, input_size, hidden_sizes, output_size, learning_rate=0.5, hidden_activations="sigmoid", 
+    def __init__(self, input_size, hidden_sizes, output_size, learning_rate=0.5, hidden_activations=["sigmoid"], 
                  output_activation="sigmoid", loss_function='mse', zero_init=False, init_type="uniform", 
                  lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None, reg_type='none', reg_lambda = 0.01,
                  rms_norm=False, rms_epsilon=1e-8):
@@ -22,239 +20,130 @@ class FFNN:
         self.reg_lambda = reg_lambda
         self.rms_norm = rms_norm
         self.rms_epsilon = rms_epsilon
+        self.hidden_activations = hidden_activations
+        self.output_activation = output_activation
 
-        self.rms_weights_cache = []
-        self.rms_biases_cache = []
-
-        valid_activations = {'linear', 'relu', 'sigmoid', 'tanh', 'softmax', 'leaky_relu', 'elu'}
-        valid_losses = {'mse', 'cce', 'bce'}
-        valid_reg_types = {'none', 'l1', 'l2'}
-
-        if isinstance(hidden_activations, str):
-            self.hidden_activations = [hidden_activations.lower()] * self.num_hidden_layers
-        else:
-            if len(hidden_activations) != self.num_hidden_layers:
-                raise ValueError("Activation functions should be as much as the number of the hidden layers.")
-            self.hidden_activations = [act.lower() for act in hidden_activations]
-        
-        self.output_activation = output_activation.lower()
-
-        for act in self.hidden_activations:
-            if act not in valid_activations:
-                raise ValueError(f"Hidden activations should be one of: {valid_activations}")
-            
-        if self.output_activation not in valid_activations:
-            raise ValueError(f"Output activations should be one of: {valid_activations}")
-        if self.loss_function not in valid_losses:
-            raise ValueError(f"Loss function should be one of: {valid_losses}")
-        if self.reg_type not in valid_reg_types:
-            raise ValueError(f"Regularization type should be one of: {valid_reg_types}")
-        
-        # set random seed
         if seed is not None:
-            random.seed(seed)
             np.random.seed(seed)
 
         self.weights = []
         self.biases = []
+        self.weights_grad = []
+        self.biases_grad = []
+        self.rms_weights_cache = []
+        self.rms_biases_cache = []
 
-        layer_sizes = [input_size] + hidden_sizes+ [output_size]
+        layer_sizes = [input_size] + hidden_sizes + [output_size]
 
-        if self.rms_norm:
-            for i in range(len(layer_sizes) - 1):
-                weight_cache = [[Node(0.0) for _ in range(layer_sizes[i+1])] for _ in range(layer_sizes[i])]
-                bias_cache = [Node(0.0) for _ in range(layer_sizes[i+1])]
-                self.rms_weights_cache.append(weight_cache)
-                self.rms_biases_cache.append(bias_cache)
-        
         for i in range(len(layer_sizes) - 1):
             if not zero_init:
                 if init_type == "uniform":
-                    w = [[Node(random.uniform(lower_bound, upper_bound)) 
-                          for _ in range(layer_sizes[i+1])] 
-                         for _ in range(layer_sizes[i])]
-                    b = [Node(random.uniform(lower_bound, upper_bound)) 
-                         for _ in range(layer_sizes[i+1])]
+                    w = np.random.uniform(lower_bound, upper_bound, (layer_sizes[i], layer_sizes[i+1]))
+                    b = np.random.uniform(lower_bound, upper_bound, layer_sizes[i+1])
                 elif init_type == "normal":
-                    w = [[Node(np.random.normal(mean, math.sqrt(variance))) 
-                          for _ in range(layer_sizes[i+1])] 
-                         for _ in range(layer_sizes[i])]
-                    b = [Node(np.random.normal(mean, math.sqrt(variance))) 
-                         for _ in range(layer_sizes[i+1])]
-                elif init_type == "xavier_uniform":
+                    w = np.random.normal(mean, np.sqrt(variance), (layer_sizes[i], layer_sizes[i+1]))
+                    b = np.random.normal(mean, np.sqrt(variance), layer_sizes[i+1])
+                elif init_type == "xavier":
                     limit = np.sqrt(6 / (layer_sizes[i] + layer_sizes[i+1]))
-                    w = [[Node(np.random.uniform(-limit, limit)) 
-                          for _ in range(layer_sizes[i+1])] 
-                         for _ in range(layer_sizes[i])]
-                    b = [Node(0.0) for _ in range(layer_sizes[i+1])]
-                elif init_type == "xavier_normal":
-                    stddev = np.sqrt(2 / (layer_sizes[i] + layer_sizes[i+1]))
-                    w = [[Node(np.random.normal(0, stddev)) 
-                          for _ in range(layer_sizes[i+1])] 
-                         for _ in range(layer_sizes[i])]
-                    b = [Node(0.0) for _ in range(layer_sizes[i+1])]
+                    w = np.random.uniform(-limit, limit, (layer_sizes[i], layer_sizes[i+1]))
+                    b = np.zeros(layer_sizes[i+1])
                 elif init_type == "he":
-                    stddev = np.sqrt(2 / layer_sizes[i])
-                    w = [[Node(np.random.normal(0, stddev)) 
-                          for _ in range(layer_sizes[i+1])] 
-                         for _ in range(layer_sizes[i])]
-                    b = [Node(0.0) for _ in range(layer_sizes[i+1])]
+                    w = np.random.normal(0, np.sqrt(2 / layer_sizes[i]), (layer_sizes[i], layer_sizes[i+1]))
+                    b = np.zeros(layer_sizes[i+1])
                 else:
-                    raise ValueError("init_type should be 'uniform', 'normal', 'xavier_uniform', 'xavier_normal', or 'he'")
+                    raise ValueError("init_type should be 'uniform', 'normal', 'xavier', or 'he'")
             else:
-                w = [[Node(0.0) for _ in range(layer_sizes[i+1])] 
-                     for _ in range(layer_sizes[i])]
-                b = [Node(0.0) for _ in range(layer_sizes[i+1])]
+                w = np.zeros((layer_sizes[i], layer_sizes[i+1]))
+                b = np.zeros(layer_sizes[i+1])
 
             self.weights.append(w)
             self.biases.append(b)
+            self.weights_grad.append(np.zeros_like(w))
+            self.biases_grad.append(np.zeros_like(b))
 
-        self.history = {"train_loss": [], "val_loss": []}
+            if rms_norm:
+                self.rms_weights_cache.append(np.zeros_like(w))
+                self.rms_biases_cache.append(np.zeros_like(b))
+
+            self.history = {"train_loss": [], "val_loss": []}
     
-    def apply_activation(self, node, activation_type):
+    def apply_activation(self, x, activation_type):
         if activation_type == 'linear':
-            return node.linear()
+            return x
         elif activation_type == 'relu':
-            return node.relu()
+            return np.maximum(0, x)
         elif activation_type == 'sigmoid':
-            return node.sigmoid()
+            return 1 / (1 + np.exp(-x))
         elif activation_type == 'tanh':
-            return node.tanh()
+            return np.tanh(x)
         elif activation_type == 'leaky_relu':
-            return node.leaky_relu()
+            return np.where(x > 0, x, 0.01 * x)
         elif activation_type == 'elu':
-            return node.elu()
-        else:
-            raise ValueError(f"Unknown activation type: {activation_type}")
-    
-    def apply_softmax(self, nodes):
-        max_val = Node(max(n.value for n in nodes))
-        exp_vals = [n - max_val for n in nodes]    
-        exp_vals = [n.exp() for n in exp_vals]     
-        sum_exp = exp_vals[0]
-        for i in range(1, len(exp_vals)):
-            sum_exp = sum_exp + exp_vals[i]        
-        return [n / sum_exp for n in exp_vals]     
+            return np.where(x > 0, x, 1.0 * (np.exp(x) - 1))
+        elif activation_type == 'softmax':
+            exp_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
+            return exp_x / np.sum(exp_x, axis=-1, keepdims=True)    
     
     def feedforward(self, inputs):
-        inputs = [Node(x) for x in inputs]
         layer_outputs = [inputs]
 
         for layer_idx in range(self.num_hidden_layers):
-            current_input = layer_outputs[-1]
-            next_size = self.hidden_sizes[layer_idx]
-            next_layer = [None] * next_size
+            z = np.dot(layer_outputs[-1], self.weights[layer_idx]) + self.biases[layer_idx]
+            a = self.apply_activation(z, self.hidden_activations[layer_idx])
+            layer_outputs.append(a)
 
-            for i in range(next_size):
-                layer_sum = self.biases[layer_idx][i]
-                for j in range(len(current_input)):
-                    layer_sum = layer_sum + (current_input[j] * self.weights[layer_idx][j][i])
-                
-                if self.hidden_activations[layer_idx] == 'softmax':
-                    layer_sums = [None] * next_size
-                    for k in range(next_size):
-                        s = self.biases[layer_idx][k]
-                        for j in range(len(current_input)):
-                            s = s + (current_input[j] * self.weights[layer_idx][j][k])
-                        layer_sums[k] = s
-                    activated = self.apply_softmax(layer_sums)
-                    for k in range(next_size):
-                        next_layer[k] = activated[k]
-                    break
-                else:
-                    next_layer[i] = self.apply_activation(layer_sum, self.hidden_activations[layer_idx])
+        z = np.dot(layer_outputs[-1], self.weights[-1]) + self.biases[-1]
+        output = self.apply_activation(z, self.output_activation)
+        layer_outputs.append(output)
 
-            layer_outputs.append(next_layer)
-
-        output_layer = [None] * self.output_size
-        for i in range(self.output_size):
-            output_sum = self.biases[-1][i]
-            for j in range(self.hidden_sizes[-1]):
-                output_sum = output_sum + (layer_outputs[-1][j] * self.weights[-1][j][i])
-            output_layer[i] = output_sum
-
-        if self.output_activation == 'softmax':
-            output_layer = self.apply_softmax(output_layer)
-        else:
-            output_layer = [self.apply_activation(o, self.output_activation) for o in output_layer]
-
-        layer_outputs.append(output_layer)
         return layer_outputs
-
-    # cross categorical entropy
-    def cce(self, outputs, targets, output_size):
-        loss = Node(0.0)
-        batch_size = len(outputs)
-        for i in range(batch_size):
-            loss = loss + (Node(-targets[i]) * Node(math.log(outputs[i].value + 1e-15)))
-        loss = loss * Node(1.0 / output_size)
-        return loss
-
-    # binary cross entropy
-    def bce(self, outputs, targets):
-        loss = Node(0.0)
-        batch_size = len(targets) 
-
-        for i in range(batch_size):
-            prob = outputs[i].value 
-            target = targets[i]
-            
-            # clipping
-            prob = max(min(prob, 1 - 1e-15), 1e-15)
-
-            # bce formula: - (y log(p) + (1 - y) log(1 - p))
-            loss = loss + Node(-target) * Node(math.log(prob)) + Node(-(1 - target)) * Node(math.log(1 - prob))
-
-        loss = loss * Node(1.0 / batch_size) 
-        return loss
-
-    def mse(self, outputs, targets, output_size):
-        loss = Node(0.0)
-        for i in range(output_size):
-            diff = outputs[i] + Node(-targets[i])
-            loss = loss + (diff * diff)
-        loss = loss * Node(1.0 / output_size)
-        return loss 
 
     
     def compute_loss(self, outputs, targets):
-        if self.loss_function == 'cce':
-            return self.cce(outputs, targets, self.output_size)
+        if self.loss_function == 'mse':
+            diff = outputs - targets
+            return np.mean(diff ** 2, axis=-1)
+        elif self.loss_function == 'cce':
+            return -np.mean(targets * np.log(outputs + 1e-15), axis=-1)
         elif self.loss_function == 'bce':
-            return self.bce(outputs, targets)
-        else: # default mse
-            return self.mse(outputs, targets, self.output_size)
+            outputs = np.clip(outputs, 1e-15, 1 - 1e-15)
+            return -np.mean(targets * np.log(outputs) + (1 - targets) * np.log(1 - outputs), axis=-1)
+        
+    def compute_loss_grad(self, outputs, targets):
+        if self.loss_function == 'mse':
+            return 2 * (outputs - targets) / outputs.shape[-1]
+        elif self.loss_function == 'cce':
+            return (outputs - targets) / outputs.shape[0]
+        elif self.loss_function == 'bce':
+            outputs = np.clip(outputs, 1e-15, 1 - 1e-15)
+            return (outputs - targets) / (outputs * (1 - outputs) * outputs.shape[0])
             
     def compute_regularization_loss(self):
-        reg_loss = Node(0.0)
+        reg_loss = 0.0
         if self.reg_type == 'l1':
-            for layer_weights in self.weights:
-                for row in layer_weights:
-                    for w in row:
-                        reg_loss = reg_loss + Node(abs(w.value))
-            reg_loss = reg_loss * Node(self.reg_lambda)
+            reg_loss = self.reg_lambda * sum(np.sum(np.abs(w)) for w in self.weights)
         elif self.reg_type == 'l2':
-            for layer_weights in self.weights:
-                for row in layer_weights:
-                    for w in row:
-                        reg_loss = reg_loss + (w * w)
-            reg_loss = reg_loss * Node(self.reg_lambda / 2.0)
+            reg_loss = (self.reg_lambda / 2.0) * sum(np.sum(w ** 2) for w in self.weights)
         return reg_loss
 
     
-    def train(self, training_data, target_data, validation_data, validation_target, epochs, batch_size=1, verbose=1):
+    def train(self, training_data, target_data, validation_data, validation_target, epochs, batch_size=32, verbose=1):
+        training_data = np.array(training_data)
+        target_data = np.array(target_data)
+        validation_data = np.array(validation_data)
+        validation_target = np.array(validation_target)
+
         for epoch in range(epochs):
             total_loss = 0
             total_val_loss = 0
             num_batches = math.ceil(len(training_data) / batch_size)
 
             if verbose == 1:
-                pbar = tqdm(range(num_batches), 
-                        desc=f"Epoch {epoch+1}/{epochs}", 
-                        ncols=50, 
-                        bar_format='{l_bar}{bar}| {postfix}')
-            else:
-                pbar = range(num_batches)
+                pbar = tqdm(range(num_batches), desc=f"Epoch {epoch+1}/{epochs}", ncols=100)
+
+            for w_grad, b_grad in zip(self.weights_grad, self.biases_grad):
+                w_grad.fill(0)
+                b_grad.fill(0)
 
             for batch_idx in pbar:
                 start_idx = batch_idx * batch_size
@@ -262,83 +151,68 @@ class FFNN:
                 batch_inputs = training_data[start_idx:end_idx]
                 batch_targets = target_data[start_idx:end_idx]
 
-                for layer_weights in self.weights:
-                    for row in layer_weights:
-                        for w in row:
-                            w.gradient = 0.0
-                for layer_biases in self.biases:
-                    for b in layer_biases:
-                        b.gradient = 0.0
+                layer_outputs = self.feedforward(batch_inputs)
+                outputs = layer_outputs[-1]
 
-                batch_loss = Node(0.0)
-                for inputs, target in zip(batch_inputs, batch_targets):
-                    layer_outputs = self.feedforward(inputs)
-                    loss = self.compute_loss(layer_outputs[-1], target)
-                    batch_loss = batch_loss + loss
-                batch_loss = batch_loss * Node(1.0 / len(batch_inputs))
-
+                batch_loss = np.mean(self.compute_loss(outputs, batch_targets))
                 if self.reg_type != 'none':
                     reg_loss = self.compute_regularization_loss()
-                    total_loss_value = batch_loss.value + reg_loss.value
-                    batch_loss = batch_loss + reg_loss
-                else:
-                    total_loss_value = batch_loss.value
+                    batch_loss += reg_loss
+                total_loss += batch_loss
 
+                delta = self.compute_loss_grad(outputs, batch_targets)
+                for layer_idx in range(self.num_hidden_layers, -1, -1):
+                    a_prev = layer_outputs[layer_idx]
+                    w = self.weights[layer_idx]
+                    delta_next = delta
 
-                total_loss += total_loss_value
+                    self.weights_grad[layer_idx] += np.dot(a_prev.T, delta)
+                    self.biases_grad[layer_idx] += np.sum(delta, axis=0)
 
-                batch_loss.backward()
+                    if layer_idx > 0:
+                        delta = np.dot(delta, w.T)
+                        if self.hidden_activations[layer_idx-1] == 'sigmoid':
+                            delta *= layer_outputs[layer_idx] * (1 - layer_outputs[layer_idx])
+                        elif self.hidden_activations[layer_idx-1] == 'relu':
+                            delta *= (layer_outputs[layer_idx] > 0).astype(float)
 
                 for layer_idx in range(len(self.weights)):
-                    for i in range(len(self.weights[layer_idx])):
-                        for j in range(len(self.weights[layer_idx][i])):
-                            w = self.weights[layer_idx][i][j]
-                            if self.reg_type == 'l1':
-                                w.gradient += self.reg_lambda * (1.0 if w.value > 0 else -1.0 if w.value < 0 else 0.0)
-                            elif self.reg_type == 'l2':
-                                w.gradient += self.reg_lambda * w.value
-                            if self.rms_norm:
-                                rms_cache_w = self.rms_weights_cache[layer_idx][i][j]
-                                rms_cache_w.value = 0.9 * rms_cache_w.value + 0.1 * (w.gradient ** 2)
-                                adjusted_lr = self.learning_rate / (math.sqrt(rms_cache_w.value + self.rms_epsilon))
-                                w.value -= adjusted_lr * w.gradient
-                            else:
-                                w.value -= self.learning_rate * w.gradient
-                    for i in range(len(self.biases[layer_idx])):
-                        b = self.biases[layer_idx][i]
-                        if self.rms_norm:
-                            rms_cache_b = self.rms_biases_cache[layer_idx][i]
-                            rms_cache_b.value = 0.9 * rms_cache_b.value + 0.1 * (b.gradient ** 2)
-                            adjusted_lr = self.learning_rate / (math.sqrt(rms_cache_b.value + self.rms_epsilon))
-                            b.value -= adjusted_lr * b.gradient
-                        else:
-                            b.value -= self.learning_rate * b.gradient
+                    if self.reg_type == 'l1':
+                        self.weights_grad[layer_idx] += self.reg_lambda * np.sign(self.weights[layer_idx])
+                    elif self.reg_type == 'l2':
+                        self.weights_grad[layer_idx] += self.reg_lambda * self.weights[layer_idx]
+
+                    if self.rms_norm:
+                        self.rms_weights_cache[layer_idx] = 0.9 * self.rms_weights_cache[layer_idx] + 0.1 * (self.weights_grad[layer_idx] ** 2)
+                        adjusted_lr = self.learning_rate / (np.sqrt(self.rms_weights_cache[layer_idx] + self.rms_epsilon))
+                        self.weights[layer_idx] -= adjusted_lr * self.weights_grad[layer_idx]
+
+                        self.rms_biases_cache[layer_idx] = 0.9 * self.rms_biases_cache[layer_idx] + 0.1 * (self.biases_grad[layer_idx] ** 2)
+                        adjusted_lr = self.learning_rate / (np.sqrt(self.rms_biases_cache[layer_idx] + self.rms_epsilon))
+                        self.biases[layer_idx] -= adjusted_lr * self.biases_grad[layer_idx]
+                    else:
+                        self.weights[layer_idx] -= self.learning_rate * self.weights_grad[layer_idx]
+                        self.biases[layer_idx] -= self.learning_rate * self.biases_grad[layer_idx]
 
                 if verbose == 1:
-                    avg_train_loss = total_loss / (batch_idx + 1)
-                    pbar.set_postfix_str()
+                    pbar.set_postfix({'loss': total_loss / (batch_idx + 1)})
 
-            for inputs, target in zip(validation_data, validation_target):
-                layer_outputs = self.feedforward(inputs)
-                loss = self.compute_loss(layer_outputs[-1], target)
-                if self.reg_type != "none":
-                    reg_loss = self.compute_regularization_loss()
-                    total_val_loss += loss.value + reg_loss.value
-                else:
-                    total_val_loss += loss.value
+            # Validasi
+            val_outputs = self.feedforward(validation_data)[-1]
+            total_val_loss = np.mean(self.compute_loss(val_outputs, validation_target))
+            if self.reg_type != 'none':
+                total_val_loss += self.compute_regularization_loss()
 
-            avg_train_loss = total_loss / num_batches
-            avg_val_loss = total_val_loss / len(validation_data)
-            self.history["train_loss"].append(avg_train_loss)
-            self.history["val_loss"].append(avg_val_loss)
+            self.history["train_loss"].append(total_loss / num_batches)
+            self.history["val_loss"].append(total_val_loss)
 
             if verbose == 1:
-                print(f"Train Loss: {avg_train_loss:.4f} - Val Loss: {avg_val_loss:.4f}")
+                print(f"Train Loss: {total_loss / num_batches:.4f} - Val Loss: {total_val_loss:.4f}")
 
 
     def predict(self, inputs):
         layer_outputs = self.feedforward(inputs)
-        return [o.value for o in layer_outputs[-1]]
+        return layer_outputs[-1].tolist()
     
     # compare sama sklearn MLP
     def compare_lib(self, X_train, y_train, X_test, y_test):
@@ -374,24 +248,24 @@ class FFNN:
         plt.show()
     
     def get_layer_weights(self, layer_index):
-        total_weight_layers = self.num_hidden_layers + 1  # Jumlah matriks bobot
+        total_weight_layers = self.num_hidden_layers + 1  # Number of weight matrices
         if layer_index < total_weight_layers:
-            return [w.value for row in self.weights[layer_index] for w in row]
+            return [w for row in self.weights[layer_index] for w in row]  # Flatten weights
         elif layer_index < total_weight_layers + self.num_hidden_layers + 1:
             bias_idx = layer_index - total_weight_layers
-            return [b.value for b in self.biases[bias_idx]]
+            return [b for b in self.biases[bias_idx]]  # Return biases as a flat list
         else:
-            raise ValueError(f"Layer index harus antara 0 dan {total_weight_layers + self.num_hidden_layers}")
+            raise ValueError(f"Layer index must be between 0 and {total_weight_layers + self.num_hidden_layers}")
 
     def get_layer_gradients(self, layer_index):
         total_weight_layers = self.num_hidden_layers + 1
         if layer_index < total_weight_layers:
-            return [w.gradient for row in self.weights[layer_index] for w in row]
+            return [g for row in self.weights_grad[layer_index] for g in row]  # Flatten gradients
         elif layer_index < total_weight_layers + self.num_hidden_layers + 1:
             bias_idx = layer_index - total_weight_layers
-            return [b.gradient for b in self.biases[bias_idx]]
+            return [g for g in self.biases_grad[bias_idx]]  # Return bias gradients
         else:
-            raise ValueError(f"Layer index harus antara 0 dan {total_weight_layers + self.num_hidden_layers}")
+            raise ValueError(f"Layer index must be between 0 and {total_weight_layers + self.num_hidden_layers}")
 
     def get_layer_name(self, layer_index):
         total_weight_layers = self.num_hidden_layers + 1
@@ -493,11 +367,11 @@ class FFNN:
                 label = f"I{neuron_idx}"
             elif layer_idx == num_layers - 1:
                 label = f"O{neuron_idx}"
-                bias = self.biases[-1][neuron_idx].value
+                bias = self.biases[-1][neuron_idx]  # No .value needed
                 ax.text(x, y + 0.05, f"b={bias:.2f}", fontsize=8, ha='center')
             else:
                 label = f"H{layer_idx-1}_{neuron_idx}"
-                bias = self.biases[layer_idx-1][neuron_idx].value
+                bias = self.biases[layer_idx-1][neuron_idx]  # No .value needed
                 ax.text(x, y + 0.05, f"b={bias:.2f}", fontsize=8, ha='center')
             ax.scatter(x, y, s=100, label=label if neuron_idx == 0 else None)
             ax.text(x, y, label, fontsize=8, ha='center', va='center', color='white')
@@ -507,8 +381,8 @@ class FFNN:
                 for j in range(layer_sizes[layer_idx + 1]):
                     x1, y1 = neuron_positions[(layer_idx, i)]
                     x2, y2 = neuron_positions[(layer_idx + 1, j)]
-                    w = self.weights[layer_idx][i][j].value
-                    g = self.weights[layer_idx][i][j].gradient
+                    w = self.weights[layer_idx][i][j]  # No .value needed
+                    g = self.weights_grad[layer_idx][i][j]  # No .gradient needed
                     ax.plot([x1, x2], [y1, y2], 'k-', alpha=0.2)
                     mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
                     ax.text(mid_x, mid_y, f"w={w:.2f}\ng={g:.2f}", fontsize=6, alpha=0.7)
