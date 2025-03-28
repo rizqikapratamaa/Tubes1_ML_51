@@ -3,22 +3,22 @@ import math
 
 class Node:
     def __init__(self, value, gradient=0.0):
-        self.value = value # node value
-        self.gradient = gradient # node gradient
-        self.parent = [] # list of parent node, it contains tuple (parent_node, local_gradient)
-        self.op = None # operation that produce this node
+        self.value = value
+        self.gradient = gradient
+        self.parent = []
+        self.op = None
     
     def __add__(self, other):
         other = other if isinstance(other, Node) else Node(other)
         result = Node(self.value + other.value)
-        result.parent = [(self, 1.0), (other, 1.0)] # gradient to its parents
-        self.op = "add"
+        result.parent = [(self, 1.0), (other, 1.0)]
+        result.op = "add"
         return result
     
     def __mul__(self, other):
         other = other if isinstance(other, Node) else Node(other)
         result = Node(self.value * other.value)
-        result.parent = [(self, other.value), (other, self.value)] # local gradient
+        result.parent = [(self, other.value), (other, self.value)]
         result.op = "mul"
         return result
 
@@ -32,20 +32,14 @@ class Node:
     def exp(self):
         value = math.exp(self.value)
         result = Node(value)
-        result.parent = [(self, value)] # d/dx e^x = e^x
+        result.parent = [(self, value)]
         result.op = "exp"
         return result
 
-    def linear(self):
-        result = Node(self.value)
-        result.parent = [(self, 1.0)]
-        result.op = "linear"
-        return result
-    
     def relu(self):
         value = max(0, self.value)
         result = Node(value)
-        result.parent = [(self, 1.0 if self.value > 0.0 else 0.0)]
+        result.parent = [(self, 1.0 if self.value > 0 else 0.0)]
         result.op = "relu"
         return result
     
@@ -55,40 +49,15 @@ class Node:
         result.parent = [(self, value * (1 - value))]
         result.op = "sigmoid"
         return result
-    
-    def tanh(self):
-        value = math.tanh(self.value)
-        result = Node(value)
-        result.parent = [(self, 1 - value * value)]
-        result.op = "tanh"
-        return result
 
-    def leaky_relu(self, alpha=0.01):
-        value = self.value if self.value > 0 else alpha * self.value
-        result = Node(value)
-        result.parent = [(self, 1.0 if self.value > 0 else alpha)]
-        result.op = "leaky_relu"
-        return result
-
-    def elu(self, alpha=1.0):
-        value = self.value if self.value > 0 else alpha * (math.exp(self.value) - 1)
-        result = Node(value)
-        result.parent = [(self, 1.0 if self.value > 0 else alpha * math.exp(self.value))]
-        result.op = "elu"
-        return result
-
-    def backward(self, gradient=1.0):
-        stack = [(self, gradient)]
+    def backward(self):
+        stack = [(self, 1.0)]
         visited = set()
-
         while stack:
-            current_node, current_gradient = stack.pop()
-            
-            if current_node in visited:
+            node, grad = stack.pop()
+            if node in visited:
                 continue
-            
-            visited.add(current_node)
-            current_node.gradient += current_gradient
-
-            for parent, local_gradient in current_node.parent:
-                stack.append((parent, current_gradient * local_gradient))
+            visited.add(node)
+            node.gradient += grad
+            for parent, local_grad in node.parent:
+                stack.append((parent, grad * local_grad))
