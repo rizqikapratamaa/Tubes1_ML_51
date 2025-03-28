@@ -5,7 +5,7 @@ from sklearn.datasets import fetch_openml
 import numpy as np
 from FFNN import FFNN
 
-def preprocess_mnist(num_samples=200000):
+def preprocess_mnist(num_samples=20000):
     mnist = fetch_openml('mnist_784', version=1, as_frame=False)
     X = mnist.data
     y = mnist.target.astype(np.int32)
@@ -43,7 +43,7 @@ def preprocess_iris():
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 if __name__ == "__main__":
-    X_train, X_val, X_test, y_train, y_val, y_test = preprocess_mnist(num_samples=20000)
+    X_train, X_val, X_test, y_train, y_val, y_test = preprocess_mnist(num_samples=10000)
     
     ffnn = FFNN(
         input_size=784,

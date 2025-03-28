@@ -248,24 +248,24 @@ class FFNN:
         plt.show()
     
     def get_layer_weights(self, layer_index):
-        total_weight_layers = self.num_hidden_layers + 1  # Jumlah matriks bobot
+        total_weight_layers = self.num_hidden_layers + 1  # Number of weight matrices
         if layer_index < total_weight_layers:
-            return [w.value for row in self.weights[layer_index] for w in row]
+            return [w for row in self.weights[layer_index] for w in row]  # Flatten weights
         elif layer_index < total_weight_layers + self.num_hidden_layers + 1:
             bias_idx = layer_index - total_weight_layers
-            return [b.value for b in self.biases[bias_idx]]
+            return [b for b in self.biases[bias_idx]]  # Return biases as a flat list
         else:
-            raise ValueError(f"Layer index harus antara 0 dan {total_weight_layers + self.num_hidden_layers}")
+            raise ValueError(f"Layer index must be between 0 and {total_weight_layers + self.num_hidden_layers}")
 
     def get_layer_gradients(self, layer_index):
         total_weight_layers = self.num_hidden_layers + 1
         if layer_index < total_weight_layers:
-            return [w.gradient for row in self.weights[layer_index] for w in row]
+            return [g for row in self.weights_grad[layer_index] for g in row]  # Flatten gradients
         elif layer_index < total_weight_layers + self.num_hidden_layers + 1:
             bias_idx = layer_index - total_weight_layers
-            return [b.gradient for b in self.biases[bias_idx]]
+            return [g for g in self.biases_grad[bias_idx]]  # Return bias gradients
         else:
-            raise ValueError(f"Layer index harus antara 0 dan {total_weight_layers + self.num_hidden_layers}")
+            raise ValueError(f"Layer index must be between 0 and {total_weight_layers + self.num_hidden_layers}")
 
     def get_layer_name(self, layer_index):
         total_weight_layers = self.num_hidden_layers + 1
@@ -367,11 +367,11 @@ class FFNN:
                 label = f"I{neuron_idx}"
             elif layer_idx == num_layers - 1:
                 label = f"O{neuron_idx}"
-                bias = self.biases[-1][neuron_idx].value
+                bias = self.biases[-1][neuron_idx]  # No .value needed
                 ax.text(x, y + 0.05, f"b={bias:.2f}", fontsize=8, ha='center')
             else:
                 label = f"H{layer_idx-1}_{neuron_idx}"
-                bias = self.biases[layer_idx-1][neuron_idx].value
+                bias = self.biases[layer_idx-1][neuron_idx]  # No .value needed
                 ax.text(x, y + 0.05, f"b={bias:.2f}", fontsize=8, ha='center')
             ax.scatter(x, y, s=100, label=label if neuron_idx == 0 else None)
             ax.text(x, y, label, fontsize=8, ha='center', va='center', color='white')
@@ -381,8 +381,8 @@ class FFNN:
                 for j in range(layer_sizes[layer_idx + 1]):
                     x1, y1 = neuron_positions[(layer_idx, i)]
                     x2, y2 = neuron_positions[(layer_idx + 1, j)]
-                    w = self.weights[layer_idx][i][j].value
-                    g = self.weights[layer_idx][i][j].gradient
+                    w = self.weights[layer_idx][i][j]  # No .value needed
+                    g = self.weights_grad[layer_idx][i][j]  # No .gradient needed
                     ax.plot([x1, x2], [y1, y2], 'k-', alpha=0.2)
                     mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
                     ax.text(mid_x, mid_y, f"w={w:.2f}\ng={g:.2f}", fontsize=6, alpha=0.7)
