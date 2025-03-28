@@ -78,6 +78,17 @@ class Node:
         return result
 
     def backward(self, gradient=1.0):
-        self.gradient += gradient
-        for parent, local_gradient in self.parent:
-            parent.backward(gradient * local_gradient)
+        stack = [(self, gradient)]
+        visited = set()
+
+        while stack:
+            current_node, current_gradient = stack.pop()
+            
+            if current_node in visited:
+                continue
+            
+            visited.add(current_node)
+            current_node.gradient += current_gradient
+
+            for parent, local_gradient in current_node.parent:
+                stack.append((parent, current_gradient * local_gradient))
