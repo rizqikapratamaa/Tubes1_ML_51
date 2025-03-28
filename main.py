@@ -60,9 +60,10 @@ if __name__ == "__main__":
         reg_type='l2',
         reg_lambda=0.001,
         rms_norm=True,
-        init_type='he'
+        init_type='he',
+        seed=69420
     )
-    ffnn.train(X_train, y_train, X_val, y_val, epochs=30, batch_size=32, verbose=1)
+    ffnn.train(X_train, y_train, X_val, y_val, epochs=20, batch_size=32, verbose=1)
     
     correct = 0
     for inputs, target in zip(X_test, y_test):
@@ -73,8 +74,3 @@ if __name__ == "__main__":
             correct += 1
     
     print(f"Akurasi: {correct / len(y_test) * 100:.2f}%")
-
-    # ffnn.plot_training_history()
-    # ffnn.plot_weight_distributions()
-    # ffnn.plot_gradient_distributions()
-    # visualize_network_light(ffnn)
