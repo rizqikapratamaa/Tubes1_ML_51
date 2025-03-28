@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
+from Tensor import Tensor
 
 class FFNN:
     def __init__(self, input_size, hidden_sizes, output_size, learning_rate=0.5, hidden_activations=["sigmoid"], 
@@ -55,8 +56,8 @@ class FFNN:
                 w = np.zeros((layer_sizes[i], layer_sizes[i+1]))
                 b = np.zeros(layer_sizes[i+1])
 
-            self.weights.append(w)
-            self.biases.append(b)
+            self.weights.append(Tensor(w))
+            self.biases.append(Tensor(b))
             self.weights_grad.append(np.zeros_like(w))
             self.biases_grad.append(np.zeros_like(b))
 
@@ -64,34 +65,34 @@ class FFNN:
                 self.rms_weights_cache.append(np.zeros_like(w))
                 self.rms_biases_cache.append(np.zeros_like(b))
 
-            self.history = {"train_loss": [], "val_loss": []}
+        self.history = {"train_loss": [], "val_loss": []}
     
     def apply_activation(self, x, activation_type):
         if activation_type == 'linear':
             return x
         elif activation_type == 'relu':
-            return np.maximum(0, x)
+            return x.relu()
         elif activation_type == 'sigmoid':
-            return 1 / (1 + np.exp(-x))
+            return x.sigmoid()
         elif activation_type == 'tanh':
-            return np.tanh(x)
+            return x.tanh()
         elif activation_type == 'leaky_relu':
-            return np.where(x > 0, x, 0.01 * x)
+            return x.leaky_relu()
         elif activation_type == 'elu':
-            return np.where(x > 0, x, 1.0 * (np.exp(x) - 1))
+            return x.elu()
         elif activation_type == 'softmax':
-            exp_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
-            return exp_x / np.sum(exp_x, axis=-1, keepdims=True)    
+            return x.softmax() 
     
     def feedforward(self, inputs):
+        inputs = Tensor(inputs, requires_grad=False)
         layer_outputs = [inputs]
 
         for layer_idx in range(self.num_hidden_layers):
-            z = np.dot(layer_outputs[-1], self.weights[layer_idx]) + self.biases[layer_idx]
+            z = layer_outputs[-1].dot(self.weights[layer_idx]) + self.biases[layer_idx]
             a = self.apply_activation(z, self.hidden_activations[layer_idx])
             layer_outputs.append(a)
 
-        z = np.dot(layer_outputs[-1], self.weights[-1]) + self.biases[-1]
+        z = layer_outputs[-1].dot(self.weights[-1]) + self.biases[-1]
         output = self.apply_activation(z, self.output_activation)
         layer_outputs.append(output)
 
@@ -99,14 +100,15 @@ class FFNN:
 
     
     def compute_loss(self, outputs, targets):
+        targets = Tensor(targets, requires_grad=False)
         if self.loss_function == 'mse':
             diff = outputs - targets
-            return np.mean(diff ** 2, axis=-1)
+            return (diff * diff).data.mean(axis=-1)
         elif self.loss_function == 'cce':
-            return -np.mean(targets * np.log(outputs + 1e-15), axis=-1)
+            return (-(targets * np.log(outputs.data + 1e-15))).data.mean(axis=-1)
         elif self.loss_function == 'bce':
-            outputs = np.clip(outputs, 1e-15, 1 - 1e-15)
-            return -np.mean(targets * np.log(outputs) + (1 - targets) * np.log(1 - outputs), axis=-1)
+            outputs_data = np.clip(outputs.data, 1e-15, 1 - 1e-15)
+            return (-(targets * np.log(outputs_data) + (1 - targets) * np.log(1 - outputs_data))).data.mean(axis=-1)
         
     def compute_loss_grad(self, outputs, targets):
         if self.loss_function == 'mse':
@@ -120,9 +122,9 @@ class FFNN:
     def compute_regularization_loss(self):
         reg_loss = 0.0
         if self.reg_type == 'l1':
-            reg_loss = self.reg_lambda * sum(np.sum(np.abs(w)) for w in self.weights)
+            reg_loss = self.reg_lambda * sum(np.sum(np.abs(w.data)) for w in self.weights)
         elif self.reg_type == 'l2':
-            reg_loss = (self.reg_lambda / 2.0) * sum(np.sum(w ** 2) for w in self.weights)
+            reg_loss = (self.reg_lambda / 2.0) * sum(np.sum(w.data ** 2) for w in self.weights)
         return reg_loss
 
     
@@ -140,63 +142,62 @@ class FFNN:
             if verbose == 1:
                 pbar = tqdm(range(num_batches), desc=f"Epoch {epoch+1}/{epochs}", ncols=100)
 
-            for w_grad, b_grad in zip(self.weights_grad, self.biases_grad):
-                w_grad.fill(0)
-                b_grad.fill(0)
-
             for batch_idx in pbar:
                 start_idx = batch_idx * batch_size
                 end_idx = min((batch_idx + 1) * batch_size, len(training_data))
                 batch_inputs = training_data[start_idx:end_idx]
                 batch_targets = target_data[start_idx:end_idx]
 
+                for w, b in zip(self.weights, self.biases):
+                    w.grad = np.zeros_like(w.data)
+                    b.grad = np.zeros_like(b.data)
+
                 layer_outputs = self.feedforward(batch_inputs)
                 outputs = layer_outputs[-1]
 
-                batch_loss = np.mean(self.compute_loss(outputs, batch_targets))
+                if self.loss_function == 'mse':
+                    diff = outputs - Tensor(batch_targets, requires_grad=False)
+                    loss = (diff * diff).mean()
+                elif self.loss_function == 'cce':
+                    targets = Tensor(batch_targets, requires_grad=False)
+                    loss = (-(targets * outputs.log())).mean()
+                elif self.loss_function == 'bce':
+                    targets = Tensor(batch_targets, requires_grad=False)
+                    outputs_clipped = Tensor(np.clip(outputs.data, 1e-15, 1 - 1e-15))
+                    loss = (-(targets * outputs_clipped.log() + (Tensor(1) - targets) * (Tensor(1) - outputs_clipped).log())).mean()
+
+                batch_loss = loss.data
                 if self.reg_type != 'none':
                     reg_loss = self.compute_regularization_loss()
                     batch_loss += reg_loss
                 total_loss += batch_loss
 
-                delta = self.compute_loss_grad(outputs, batch_targets)
-                for layer_idx in range(self.num_hidden_layers, -1, -1):
-                    a_prev = layer_outputs[layer_idx]
-                    w = self.weights[layer_idx]
-                    delta_next = delta
-
-                    self.weights_grad[layer_idx] += np.dot(a_prev.T, delta)
-                    self.biases_grad[layer_idx] += np.sum(delta, axis=0)
-
-                    if layer_idx > 0:
-                        delta = np.dot(delta, w.T)
-                        if self.hidden_activations[layer_idx-1] == 'sigmoid':
-                            delta *= layer_outputs[layer_idx] * (1 - layer_outputs[layer_idx])
-                        elif self.hidden_activations[layer_idx-1] == 'relu':
-                            delta *= (layer_outputs[layer_idx] > 0).astype(float)
+                loss.backward()
 
                 for layer_idx in range(len(self.weights)):
+                    w_grad = self.weights[layer_idx].grad
+                    b_grad = self.biases[layer_idx].grad
+
                     if self.reg_type == 'l1':
-                        self.weights_grad[layer_idx] += self.reg_lambda * np.sign(self.weights[layer_idx])
+                        w_grad += self.reg_lambda * np.sign(self.weights[layer_idx].data)
                     elif self.reg_type == 'l2':
-                        self.weights_grad[layer_idx] += self.reg_lambda * self.weights[layer_idx]
+                        w_grad += self.reg_lambda * self.weights[layer_idx].data
 
                     if self.rms_norm:
-                        self.rms_weights_cache[layer_idx] = 0.9 * self.rms_weights_cache[layer_idx] + 0.1 * (self.weights_grad[layer_idx] ** 2)
+                        self.rms_weights_cache[layer_idx] = 0.9 * self.rms_weights_cache[layer_idx] + 0.1 * (w_grad ** 2)
                         adjusted_lr = self.learning_rate / (np.sqrt(self.rms_weights_cache[layer_idx] + self.rms_epsilon))
-                        self.weights[layer_idx] -= adjusted_lr * self.weights_grad[layer_idx]
+                        self.weights[layer_idx].data -= adjusted_lr * w_grad
 
-                        self.rms_biases_cache[layer_idx] = 0.9 * self.rms_biases_cache[layer_idx] + 0.1 * (self.biases_grad[layer_idx] ** 2)
+                        self.rms_biases_cache[layer_idx] = 0.9 * self.rms_biases_cache[layer_idx] + 0.1 * (b_grad ** 2)
                         adjusted_lr = self.learning_rate / (np.sqrt(self.rms_biases_cache[layer_idx] + self.rms_epsilon))
-                        self.biases[layer_idx] -= adjusted_lr * self.biases_grad[layer_idx]
+                        self.biases[layer_idx].data -= adjusted_lr * b_grad
                     else:
-                        self.weights[layer_idx] -= self.learning_rate * self.weights_grad[layer_idx]
-                        self.biases[layer_idx] -= self.learning_rate * self.biases_grad[layer_idx]
+                        self.weights[layer_idx].data -= self.learning_rate * w_grad
+                        self.biases[layer_idx].data -= self.learning_rate * b_grad
 
                 if verbose == 1:
                     pbar.set_postfix({'loss': total_loss / (batch_idx + 1)})
 
-            # Validasi
             val_outputs = self.feedforward(validation_data)[-1]
             total_val_loss = np.mean(self.compute_loss(val_outputs, validation_target))
             if self.reg_type != 'none':
@@ -211,12 +212,10 @@ class FFNN:
 
     def predict(self, inputs):
         layer_outputs = self.feedforward(inputs)
-        return layer_outputs[-1].tolist()
+        return layer_outputs[-1].data.tolist()
     
     # compare sama sklearn MLP
     def compare_lib(self, X_train, y_train, X_test, y_test):
-        from sklearn.metrics import accuracy_score
-        
         mlp_activation = self.hidden_activations[0] if self.hidden_activations[0] in {'relu', 'sigmoid', 'tanh'} else 'relu'
         mlp = MLPClassifier(hidden_layer_sizes=tuple(self.hidden_sizes), 
                             activation=mlp_activation, 
@@ -259,8 +258,8 @@ class FFNN:
         }
         
         for i in range(len(self.weights)):
-            model_params[f'weights_{i}'] = self.weights[i]
-            model_params[f'biases_{i}'] = self.biases[i]
+            model_params[f'weights_{i}'] = self.weights[i].data
+            model_params[f'biases_{i}'] = self.biases[i].data
         
         if self.rms_norm:
             for i in range(len(self.rms_weights_cache)):
@@ -307,8 +306,8 @@ class FFNN:
         
         num_layers = len(hidden_sizes) + 1
         for i in range(num_layers):
-            model.weights[i] = data[f'weights_{i}']
-            model.biases[i] = data[f'biases_{i}']
+            model.weights[i] = Tensor(data[f'weights_{i}'])
+            model.biases[i] = Tensor(data[f'biases_{i}'])
             
             if rms_norm:
                 model.rms_weights_cache[i] = data[f'rms_weights_cache_{i}']

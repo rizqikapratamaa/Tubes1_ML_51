@@ -87,20 +87,20 @@ class Plotter:
     def get_layer_weights(self, ffnn, layer_index):
         total_weight_layers = ffnn.num_hidden_layers + 1
         if layer_index < total_weight_layers:
-            return [w for row in ffnn.weights[layer_index] for w in row]
+            return [w for row in ffnn.weights[layer_index].data for w in row]
         elif layer_index < total_weight_layers + ffnn.num_hidden_layers + 1:
             bias_idx = layer_index - total_weight_layers
-            return [b for b in ffnn.biases[bias_idx]]
+            return [b for b in ffnn.biases[bias_idx].data]
         else:
             raise ValueError(f"Layer index must be between 0 and {total_weight_layers + ffnn.num_hidden_layers}")
 
     def get_layer_gradients(self, ffnn, layer_index):
         total_weight_layers = ffnn.num_hidden_layers + 1
         if layer_index < total_weight_layers:
-            return [g for row in ffnn.weights_grad[layer_index] for g in row]
+            return [g for row in ffnn.weights[layer_index].grad for g in row]
         elif layer_index < total_weight_layers + ffnn.num_hidden_layers + 1:
             bias_idx = layer_index - total_weight_layers
-            return [g for g in ffnn.biases_grad[bias_idx]]
+            return [g for g in ffnn.biases[bias_idx].grad]
         else:
             raise ValueError(f"Layer index must be between 0 and {total_weight_layers + ffnn.num_hidden_layers}")
 
