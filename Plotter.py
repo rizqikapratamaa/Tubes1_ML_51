@@ -180,3 +180,45 @@ class Plotter:
         
         plt.tight_layout()
         plt.show()
+
+    def plot_per_epoch(self, ffnn):
+        if not ffnn.history['train_loss'] or not ffnn.history['val_loss']:
+            print("No training history available. Please train the model first.")
+            return
+
+        epochs = range(1, len(ffnn.history['train_loss']) + 1)
+        
+        plt.figure(figsize=(10, 6))
+        
+        plt.plot(epochs, ffnn.history['train_loss'], 
+                label='Training Loss', 
+                color='blue',
+                marker='o',
+                markersize=4,
+                linewidth=2)
+        
+        plt.plot(epochs, ffnn.history['val_loss'], 
+                label='Validation Loss', 
+                color='red',
+                marker='s',
+                markersize=4,
+                linewidth=2)
+        
+        min_train_loss = min(ffnn.history['train_loss'])
+        min_val_loss = min(ffnn.history['val_loss'])
+        plt.axhline(y=min_train_loss, color='blue', linestyle='--', alpha=0.3)
+        plt.axhline(y=min_val_loss, color='red', linestyle='--', alpha=0.3)
+        
+        plt.xlabel('Epoch', fontsize=12)
+        plt.ylabel('Loss', fontsize=12)
+        plt.title('Training vs Validation Loss per Epoch', fontsize=14, pad=15)
+        plt.legend(fontsize=10)
+        plt.grid(True, alpha=0.3)
+        
+        plt.text(len(epochs), min_train_loss, f'Min Train: {min_train_loss:.4f}', 
+                va='bottom', ha='right', alpha=0.7, color='blue')
+        plt.text(len(epochs), min_val_loss, f'Min Val: {min_val_loss:.4f}', 
+                va='top', ha='right', alpha=0.7, color='red')
+        
+        plt.tight_layout()
+        plt.show()

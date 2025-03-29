@@ -3,9 +3,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.datasets import fetch_openml
 import numpy as np
-import matplotlib.pyplot as plt
-import networkx as nx
-from IPython.display import display
 from FFNN import FFNN
 
 
