@@ -259,14 +259,15 @@ class FFNN:
             'reg_type': self.reg_type,
             'reg_lambda': self.reg_lambda,
             'rms_norm': self.rms_norm,
-            'rms_epsilon': self.rms_epsilon
+            'rms_epsilon': self.rms_epsilon,
+            'rms_prop': self.rms_prop
         }
         
         for i in range(len(self.weights)):
             model_params[f'weights_{i}'] = self.weights[i].data
             model_params[f'biases_{i}'] = self.biases[i].data
         
-        if self.rms_norm:
+        if self.rms_prop:
             for i in range(len(self.rms_weights_cache)):
                 model_params[f'rms_weights_cache_{i}'] = self.rms_weights_cache[i]
                 model_params[f'rms_biases_cache_{i}'] = self.rms_biases_cache[i]
@@ -294,6 +295,7 @@ class FFNN:
         reg_lambda = float(data['reg_lambda'])
         rms_norm = bool(data['rms_norm'])
         rms_epsilon = float(data['rms_epsilon'])
+        rms_prop = float(data['rms_prop'])
         
         model = cls(
             input_size=input_size,
@@ -306,7 +308,8 @@ class FFNN:
             reg_type=reg_type,
             reg_lambda=reg_lambda,
             rms_norm=rms_norm,
-            rms_epsilon=rms_epsilon
+            rms_epsilon=rms_epsilon,
+            rms_prop = rms_prop
         )
         
         num_layers = len(hidden_sizes) + 1
@@ -314,7 +317,7 @@ class FFNN:
             model.weights[i] = Tensor(data[f'weights_{i}'])
             model.biases[i] = Tensor(data[f'biases_{i}'])
             
-            if rms_norm:
+            if rms_prop:
                 model.rms_weights_cache[i] = data[f'rms_weights_cache_{i}']
                 model.rms_biases_cache[i] = data[f'rms_biases_cache_{i}']
         
