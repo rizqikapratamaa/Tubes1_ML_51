@@ -151,3 +151,17 @@ class Tensor:
         self.grad = np.ones_like(self.data)
         for node in reversed(topo):
             node._backward()
+
+    def rms_norm(self, epsilon=1e-8):
+        rms = np.sqrt(np.mean(self.data**2, axis=-1, keepdims=True) + epsilon)
+        out_data = self.data / rms
+        out = Tensor(out_data, (self,), 'rms_norm', requires_grad=self.requires_grad)
+
+        def _backward():
+            if self.requires_grad:
+                n = self.data.shape[-1]
+                grad_rms = -np.sum(self.data * out.grad, axis=-1, keepdims=True) / (rms**2 * n)
+                grad_x = (out.grad / rms) + (self.data * grad_rms / (rms * n))
+                self.grad += grad_x
+        out._backward = _backward
+        return out

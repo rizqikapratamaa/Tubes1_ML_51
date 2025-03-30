@@ -9,7 +9,7 @@ class FFNN:
     def __init__(self, input_size, hidden_sizes, output_size, learning_rate=0.5, hidden_activations=["sigmoid"], 
                  output_activation="sigmoid", loss_function='mse', zero_init=False, init_type="uniform", 
                  lower_bound=-1, upper_bound=1, mean=0, variance=1, seed=None, reg_type='none', reg_lambda = 0.01,
-                 rms_norm=False, rms_epsilon=1e-8):
+                 rms_norm=False, rms_epsilon=1e-8, rms_prop=False):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.num_hidden_layers = len(hidden_sizes)
@@ -20,6 +20,7 @@ class FFNN:
         self.reg_lambda = reg_lambda
         self.rms_norm = rms_norm
         self.rms_epsilon = rms_epsilon
+        self.rms_prop = rms_prop
         self.hidden_activations = hidden_activations
         self.output_activation = output_activation
 
@@ -30,8 +31,10 @@ class FFNN:
         self.biases = []
         self.weights_grad = []
         self.biases_grad = []
-        self.rms_weights_cache = []
-        self.rms_biases_cache = []
+
+        if self.rms_prop:
+            self.rms_weights_cache = []
+            self.rms_biases_cache = []
 
         layer_sizes = [input_size] + hidden_sizes + [output_size]
 
@@ -61,7 +64,7 @@ class FFNN:
             self.weights_grad.append(np.zeros_like(w))
             self.biases_grad.append(np.zeros_like(b))
 
-            if rms_norm:
+            if rms_prop:
                 self.rms_weights_cache.append(np.zeros_like(w))
                 self.rms_biases_cache.append(np.zeros_like(b))
 
@@ -90,6 +93,8 @@ class FFNN:
         for layer_idx in range(self.num_hidden_layers):
             z = layer_outputs[-1].dot(self.weights[layer_idx]) + self.biases[layer_idx]
             a = self.apply_activation(z, self.hidden_activations[layer_idx])
+            if self.rms_norm:
+                a = a.rms_norm(epsilon=self.rms_epsilon)
             layer_outputs.append(a)
 
         z = layer_outputs[-1].dot(self.weights[-1]) + self.biases[-1]
@@ -183,7 +188,7 @@ class FFNN:
                     elif self.reg_type == 'l2':
                         w_grad += self.reg_lambda * self.weights[layer_idx].data
 
-                    if self.rms_norm:
+                    if self.rms_prop:
                         self.rms_weights_cache[layer_idx] = 0.9 * self.rms_weights_cache[layer_idx] + 0.1 * (w_grad ** 2)
                         adjusted_lr = self.learning_rate / (np.sqrt(self.rms_weights_cache[layer_idx] + self.rms_epsilon))
                         self.weights[layer_idx].data -= adjusted_lr * w_grad

@@ -4,6 +4,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.datasets import fetch_openml
 import numpy as np
 from FFNN import FFNN
+from Plotter import Plotter
 
 
 def preprocess_mnist(num_samples=20000):
@@ -57,7 +58,8 @@ if __name__ == "__main__":
         reg_type='l2',
         reg_lambda=0.001,
         rms_norm=True,
-        init_type='he',
+        rms_prop=False,
+        init_type='xavier',
         seed=69420
     )
     ffnn.train(X_train, y_train, X_val, y_val, epochs=20, batch_size=32, verbose=1)
@@ -71,3 +73,6 @@ if __name__ == "__main__":
             correct += 1
     
     print(f"Akurasi: {correct / len(y_test) * 100:.2f}%")
+
+    plotter = Plotter()
+    plotter.visualize_network(ffnn)

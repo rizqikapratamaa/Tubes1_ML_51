@@ -5,15 +5,16 @@ from IPython.display import display
 class Plotter:
     def __init__(self):
         pass
-    def visualize_network_light(self, ffnn, max_neurons_per_layer=5):
+    def visualize_network(self, ffnn, max_neurons_per_layer=5):
         G = nx.DiGraph()
         
         layer_sizes = [ffnn.input_size] + ffnn.hidden_sizes + [ffnn.output_size]
         num_layers = len(layer_sizes)
         
         display_sizes = [min(size, max_neurons_per_layer) for size in layer_sizes]
-        
         node_positions = {}
+        
+        # Add nodes
         for layer_idx, size in enumerate(layer_sizes):
             display_size = display_sizes[layer_idx]
             for neuron_idx in range(display_size):
@@ -26,29 +27,55 @@ class Plotter:
                 G.add_node(ellipsis_id)
                 node_positions[ellipsis_id] = (layer_idx * 2, -(display_size + 1) * 0.5)
         
+        edge_labels = {}
         for layer_idx in range(num_layers - 1):
             size_curr = display_sizes[layer_idx]
             size_next = display_sizes[layer_idx + 1]
+            weights = ffnn.weights[layer_idx].data
+            gradients = ffnn.weights[layer_idx].grad
             for i in range(size_curr):
                 for j in range(size_next):
-                    G.add_edge(f"L{layer_idx}N{i}", f"L{layer_idx + 1}N{j}")
+                    edge = (f"L{layer_idx}N{i}", f"L{layer_idx + 1}N{j}")
+                    G.add_edge(*edge)
+                    # Get weight and gradient values (limit to displayed neurons)
+                    w = weights[i, j] if i < weights.shape[0] and j < weights.shape[1] else 0
+                    g = gradients[i, j] if i < gradients.shape[0] and j < gradients.shape[1] else 0
+                    edge_labels[edge] = f"w: {w:.2f}\ng: {g:.2f}"
         
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(15, 8))
         
-        nx.draw_networkx(
+        nx.draw_networkx_nodes(
             G,
             pos=node_positions,
             node_size=500,
             node_color='lightblue',
-            font_size=8,
-            arrows=False,
-            with_labels=True,
+            alpha=0.8
+        )
+        
+        nx.draw_networkx_edges(
+            G,
+            pos=node_positions,
             edge_color='gray',
             alpha=0.5,
             width=0.5
         )
         
-        # Menambahkan label layer di atas
+        nx.draw_networkx_labels(
+            G,
+            pos=node_positions,
+            font_size=8
+        )
+        
+        nx.draw_networkx_edge_labels(
+            G,
+            pos=node_positions,
+            edge_labels=edge_labels,
+            font_size=6,
+            label_pos=0.5,
+            rotate=False
+        )
+        
+        # Add layer labels
         for layer_idx, size in enumerate(layer_sizes):
             if layer_idx == 0:
                 label = f"Input\n({size} neurons)"
@@ -56,13 +83,13 @@ class Plotter:
                 label = f"Output\n({size} neurons)\n{ffnn.output_activation}"
             else:
                 label = f"Hidden {layer_idx}\n({size} neurons)\n{ffnn.hidden_activations[layer_idx-1]}"
-            plt.text(layer_idx * 2, 1, label, 
-                    horizontalalignment='center', 
+            plt.text(layer_idx * 2, 1, label,
+                    horizontalalignment='center',
                     verticalalignment='bottom',
                     fontsize=10,
                     bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
         
-        plt.title("Lightweight Neural Network Visualization (Limited Neurons)")
+        plt.title("Neural Network Visualization with Weights and Gradients")
         plt.axis('off')
         plt.tight_layout()
         
